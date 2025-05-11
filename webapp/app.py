@@ -22,7 +22,12 @@ from flask_socketio import SocketIO, emit
 from gtts import gTTS
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gemma3:12b"
+# Modèles disponibles
+MODELS = {
+    "gemma": "gemma3:12b",
+    "llama": "llama3.1:8b"
+}
+DEFAULT_MODEL = "gemma"
 SYSTEM_PROMPT = """Tu es un assistant vocal français intelligent et serviable. 
 Réponds de manière claire et concise, idéalement en 2-3 phrases. 
 Privilégie la simplicité et la clarté dans tes réponses."""
@@ -106,7 +111,7 @@ class WebAssistant:
         prompt = f"{context}\nUtilisateur: {question}\nAssistant:"
         
         payload = {
-            "model": MODEL_NAME,
+            "model": MODELS[DEFAULT_MODEL],
             "prompt": prompt,
             "system": SYSTEM_PROMPT,
             "stream": False,
@@ -194,8 +199,8 @@ def verifier_ollama():
         models = response.json().get("models", [])
         model_names = [model.get("name") for model in models]
         
-        if MODEL_NAME not in model_names:
-            return False, f"Le modèle {MODEL_NAME} n'est pas téléchargé. Exécutez: ollama pull {MODEL_NAME}"
+        if MODELS[DEFAULT_MODEL] not in model_names:
+            return False, f"Le modèle {MODELS[DEFAULT_MODEL]} n'est pas téléchargé. Exécutez: ollama pull {MODELS[DEFAULT_MODEL]}"
         
         return True, "OK"
     except Exception as e:
@@ -217,12 +222,15 @@ def process_audio_queue():
                     
                     # Check for exit phrases
                     mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
-                    if any(mot in texte.lower() for mot in mots_arret):
+                    is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
+                    
+                    if is_exit_phrase:
                         response = "Au revoir! À bientôt."
                         audio_base64, _ = assistant.parler(response)
                         socketio.emit('response', {
                             'text': response,
-                            'audio': audio_base64
+                            'audio': audio_base64,
+                            'lastUserMessage': texte  # Inclure le message de l'utilisateur
                         })
                     else:
                         # Get response from Ollama
@@ -230,7 +238,8 @@ def process_audio_queue():
                         audio_base64, _ = assistant.parler(response)
                         socketio.emit('response', {
                             'text': response,
-                            'audio': audio_base64
+                            'audio': audio_base64,
+                            'lastUserMessage': texte  # Inclure le message de l'utilisateur
                         })
                 else:
                     socketio.emit('error', {'message': 'Je n\'ai pas compris ce que vous avez dit'})
@@ -241,6 +250,11 @@ def process_audio_queue():
         except Exception as e:
             print(f"Error in processing thread: {e}")
             socketio.emit('error', {'message': f'Erreur: {str(e)}'})
+
+@app.route('/service-worker.js')
+def serve_service_worker():
+    # Servir le service worker depuis la racine, ce qui est essentiel pour les PWA
+    return app.send_static_file('js/service-worker.js')
 
 @app.route('/')
 def index():
@@ -277,6 +291,17 @@ def handle_stop_listening():
 def handle_audio_data(data):
     audio_queue.put(data['audio'])
 
+@socketio.on('change_model')
+def handle_model_change(data):
+    global DEFAULT_MODEL
+    model = data.get('model')
+    if model in MODELS:
+        DEFAULT_MODEL = model
+        print(f"Modèle changé pour {MODELS[DEFAULT_MODEL]}")
+        emit('status', {'message': f'Modèle changé pour {MODELS[DEFAULT_MODEL]}'})
+    else:
+        emit('error', {'message': f'Modèle inconnu: {model}'})
+
 @socketio.on('text_input')
 def handle_text_input(data):
     assistant = global_assistant
@@ -284,12 +309,15 @@ def handle_text_input(data):
     
     # Check for exit phrases
     mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
-    if any(mot in texte.lower() for mot in mots_arret):
+    is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
+    
+    if is_exit_phrase:
         response = "Au revoir! À bientôt."
         audio_base64, _ = assistant.parler(response)
         emit('response', {
             'text': response,
-            'audio': audio_base64
+            'audio': audio_base64,
+            'lastUserMessage': texte  # Inclure le dernier message de l'utilisateur
         })
     else:
         # Get response from Ollama
@@ -297,7 +325,8 @@ def handle_text_input(data):
         audio_base64, _ = assistant.parler(response)
         emit('response', {
             'text': response,
-            'audio': audio_base64
+            'audio': audio_base64,
+            'lastUserMessage': texte  # Inclure le dernier message de l'utilisateur
         })
 
 if __name__ == '__main__':
@@ -306,7 +335,7 @@ if __name__ == '__main__':
     if not ollama_ok:
         print(f"❌ {message}")
     else:
-        print(f"✅ Ollama est prêt avec le modèle {MODEL_NAME}")
+        print(f"✅ Ollama est prêt avec le modèle {MODELS[DEFAULT_MODEL]}")
         
         # Parse command line arguments
         parser = argparse.ArgumentParser(description='Voice Assistant Web App')

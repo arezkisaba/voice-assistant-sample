@@ -330,6 +330,29 @@ header p {
     100% { opacity: 0.4; transform: scale(1); }
 }
 
+/* Styles pour le sélecteur de modèle */
+.model-selector-container {
+    display: flex;
+    align-items: center;
+    margin-left: 15px;
+}
+
+#model-selector {
+    padding: 6px 10px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ddd;
+    background-color: white;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+#model-selector:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
 /* Responsive design */
 @media (max-width: 600px) {
     .container {

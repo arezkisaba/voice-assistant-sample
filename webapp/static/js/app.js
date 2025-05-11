@@ -16,6 +16,7 @@ const audioPlayer = document.getElementById('audio-player');
 const autoListenToggle = document.getElementById('auto-listen-toggle');
 const assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
 const userLoadingIndicator = document.getElementById('user-loading-indicator');
+const modelSelector = document.getElementById('model-selector');
 
 // Recording variables
 let mediaRecorder;
@@ -31,6 +32,7 @@ let requiredSilenceFrames = 35; // Augmenté à 35 frames (environ 0.6 sec à 60
 let audioBuffer = []; // Pour stocker les données audio brutes
 let audioSampleRate = 0;
 let hasSpokenDetected = false; // Nouvelle variable pour suivre si l'utilisateur a commencé à parler
+let currentModel = "gemma"; // Modèle par défaut
 
 // Initialize the application
 function init() {
@@ -46,6 +48,15 @@ function init() {
             setStatus(autoListen ? 'Écoute automatique activée' : 'Écoute automatique désactivée');
         });
         autoListenToggle.checked = autoListen;
+    }
+    
+    // Model selector
+    if (modelSelector) {
+        modelSelector.addEventListener('change', function() {
+            currentModel = this.value;
+            socket.emit('change_model', { model: currentModel });
+            setStatus(`Modèle changé pour ${currentModel === 'gemma' ? 'Gemma 3:12B' : 'Llama 3.1:8B'}`);
+        });
     }
     
     // Set up audio player events
@@ -87,10 +98,27 @@ function setupSocketListeners() {
         
         // Afficher la réponse
         addMessage('assistant', data.text);
+        
+        // Vérifier si la réponse contient un mot d'arrêt, ce qui signifierait que l'utilisateur a dit au revoir
+        const mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"];
+        const userSaidGoodbye = mots_arret.some(mot => data.lastUserMessage && data.lastUserMessage.toLowerCase().includes(mot));
+        
+        if (userSaidGoodbye) {
+            // L'utilisateur a dit au revoir, donc nous ne démarrons pas l'écoute automatique
+            console.log('Mots d\'arrêt détectés, désactivation de l\'écoute automatique');
+            
+            // Optionnel : désactiver la case à cocher d'écoute automatique également
+            if (autoListenToggle) {
+                autoListenToggle.checked = false;
+                autoListen = false;
+            }
+        }
+        
         if (data.audio) {
             playAudio(data.audio);
-        } else if (autoListen && !isRecording) {
-            // Si pas d'audio mais auto-listen activé, commencer l'enregistrement
+        } else if (autoListen && !isRecording && !userSaidGoodbye) {
+            // Si pas d'audio mais auto-listen activé ET l'utilisateur n'a pas dit au revoir,
+            // commencer l'enregistrement
             startRecording();
         }
     });
