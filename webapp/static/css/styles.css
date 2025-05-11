@@ -331,13 +331,15 @@ header p {
 }
 
 /* Styles pour le sélecteur de modèle */
-.model-selector-container {
+.model-selector-container,
+.tts-lang-selector-container {
     display: flex;
     align-items: center;
     margin-left: 15px;
 }
 
-#model-selector {
+#model-selector,
+#tts-lang-selector {
     padding: 6px 10px;
     border-radius: var(--border-radius);
     border: 1px solid #ddd;
@@ -348,7 +350,8 @@ header p {
     transition: border-color 0.3s;
 }
 
-#model-selector:focus {
+#model-selector:focus,
+#tts-lang-selector:focus {
     border-color: var(--primary-color);
     outline: none;
 }

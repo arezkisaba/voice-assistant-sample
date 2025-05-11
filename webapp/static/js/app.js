@@ -17,6 +17,7 @@ const autoListenToggle = document.getElementById('auto-listen-toggle');
 const assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
 const userLoadingIndicator = document.getElementById('user-loading-indicator');
 const modelSelector = document.getElementById('model-selector');
+const ttsLangSelector = document.getElementById('tts-lang-selector');
 
 // Recording variables
 let mediaRecorder;
@@ -33,6 +34,7 @@ let audioBuffer = []; // Pour stocker les données audio brutes
 let audioSampleRate = 0;
 let hasSpokenDetected = false; // Nouvelle variable pour suivre si l'utilisateur a commencé à parler
 let currentModel = "gemma"; // Modèle par défaut
+let currentTtsLang = "fr"; // Langue TTS par défaut
 
 // Initialize the application
 function init() {
@@ -48,6 +50,18 @@ function init() {
             setStatus(autoListen ? 'Écoute automatique activée' : 'Écoute automatique désactivée');
         });
         autoListenToggle.checked = autoListen;
+    }
+    
+    // Gestionnaire pour le sélecteur de langue TTS
+    if (ttsLangSelector) {
+        ttsLangSelector.addEventListener('change', function() {
+            currentTtsLang = this.value;
+            socket.emit('change_tts_lang', { lang: currentTtsLang });
+            const langLabel = currentTtsLang === 'fr' ? 'Français' : 'English';
+            setStatus(`Langue TTS changée pour ${langLabel}`);
+        });
+        // Initialiser avec la valeur par défaut
+        ttsLangSelector.value = currentTtsLang;
     }
     
     // Charger la liste des modèles disponibles depuis l'API

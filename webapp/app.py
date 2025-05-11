@@ -30,9 +30,22 @@ DEFAULT_MODEL = "gemma3:12b"
 # Variable globale pour stocker les modèles disponibles
 AVAILABLE_MODELS = {}
 
-SYSTEM_PROMPT = """Tu es un assistant vocal français intelligent et serviable. 
+# Langue par défaut pour le TTS
+DEFAULT_TTS_LANG = "fr"
+
+# Prompts système selon la langue
+SYSTEM_PROMPTS = {
+    "fr": """Tu es un assistant vocal français intelligent et serviable. 
 Réponds de manière claire et concise, idéalement en 2-3 phrases. 
-Privilégie la simplicité et la clarté dans tes réponses."""
+Privilégie la simplicité et la clarté dans tes réponses.""",
+    
+    "en": """You are a smart and helpful English-speaking voice assistant.
+Answer in a clear and concise way, ideally in 2-3 sentences.
+Prioritize simplicity and clarity in your responses."""
+}
+
+# Prompt système par défaut
+SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_TTS_LANG]
 
 app = Flask(__name__, 
             static_folder='static',
@@ -62,12 +75,18 @@ class WebAssistant:
     def __init__(self):
         self.temp_dir = tempfile.gettempdir()
         self.conversation_history = []
+        self.tts_lang = DEFAULT_TTS_LANG  # Utiliser la langue par défaut
+        # Mapping pour les codes de langue de reconnaissance vocale
+        self.speech_lang_map = {
+            "fr": "fr-FR",
+            "en": "en-US"
+        }
 
     def parler(self, texte):
         texte = self._nettoyer_texte(texte)
         
         try:
-            tts = gTTS(text=texte, lang='fr', slow=False)
+            tts = gTTS(text=texte, lang=self.tts_lang, slow=False)
             
             timestamp = int(time.time())
             temp_file = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}.mp3")
@@ -112,10 +131,13 @@ class WebAssistant:
         
         prompt = f"{context}\nUtilisateur: {question}\nAssistant:"
         
+        # Utiliser le prompt système correspondant à la langue sélectionnée
+        system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
+        
         payload = {
             "model": DEFAULT_MODEL,
             "prompt": prompt,
-            "system": SYSTEM_PROMPT,
+            "system": system_prompt,
             "stream": False,
             "options": {
                 "temperature": 0.7,
@@ -134,10 +156,10 @@ class WebAssistant:
                 return response_text
             else:
                 print(f"❌ Erreur Ollama: {response.status_code}")
-                return "Désolé, j'ai rencontré une erreur de communication avec le modèle."
+                return "Désolé, j'ai rencontré une erreur de communication avec le modèle." if self.tts_lang == "fr" else "Sorry, I encountered an error communicating with the model."
         except Exception as e:
             print(f"❌ Exception lors de l'appel à Ollama: {e}")
-            return "Désolé, je ne peux pas accéder au modèle pour le moment."
+            return "Désolé, je ne peux pas accéder au modèle pour le moment." if self.tts_lang == "fr" else "Sorry, I cannot access the model at the moment."
 
     def analyser_audio(self, audio_data):
         try:
@@ -169,9 +191,13 @@ class WebAssistant:
             with sr.AudioFile(temp_wav) as source:
                 audio = recognizer.record(source)
                 
+            # Obtenir le code de langue approprié pour la reconnaissance vocale (fr-FR, en-US, etc.)
+            speech_lang = self.speech_lang_map.get(self.tts_lang, "fr-FR")
+            print(f"Reconnaissance vocale avec la langue: {speech_lang}")
+                
             # Try to recognize
             try:
-                texte = recognizer.recognize_google(audio, language="fr-FR")
+                texte = recognizer.recognize_google(audio, language=speech_lang)
                 return texte
             except sr.UnknownValueError:
                 print("Speech not recognized")
@@ -231,12 +257,17 @@ def process_audio_queue():
                 if texte:
                     socketio.emit('transcript', {'text': texte})
                     
-                    # Check for exit phrases
-                    mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
+                    # Mots d'arrêt dans les deux langues
+                    mots_arret_fr = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
+                    mots_arret_en = ["goodbye", "bye", "stop", "end", "terminate", "exit", "quit", "ciao"]
+                    
+                    # Vérifier la langue et utiliser les mots d'arrêt correspondants
+                    mots_arret = mots_arret_fr if assistant.tts_lang == "fr" else mots_arret_en
                     is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
                     
                     if is_exit_phrase:
-                        response = "Au revoir! À bientôt."
+                        # Message d'au revoir adapté à la langue
+                        response = "Au revoir! À bientôt." if assistant.tts_lang == "fr" else "Goodbye! See you soon."
                         audio_base64, _ = assistant.parler(response)
                         socketio.emit('response', {
                             'text': response,
@@ -253,14 +284,17 @@ def process_audio_queue():
                             'lastUserMessage': texte  # Inclure le message de l'utilisateur
                         })
                 else:
-                    socketio.emit('error', {'message': 'Je n\'ai pas compris ce que vous avez dit'})
+                    # Message d'erreur adapté à la langue
+                    error_msg = "Je n'ai pas compris ce que vous avez dit" if assistant.tts_lang == "fr" else "I didn't understand what you said"
+                    socketio.emit('error', {'message': error_msg})
             
             audio_queue.task_done()
         except queue.Empty:
             pass
         except Exception as e:
             print(f"Error in processing thread: {e}")
-            socketio.emit('error', {'message': f'Erreur: {str(e)}'})
+            error_prefix = "Erreur" if assistant.tts_lang == "fr" else "Error"
+            socketio.emit('error', {'message': f'{error_prefix}: {str(e)}'})
 
 @app.route('/models')
 def get_models():
@@ -317,17 +351,41 @@ def handle_model_change(data):
     else:
         emit('error', {'message': f'Modèle inconnu: {model}'})
 
+@socketio.on('change_tts_lang')
+def handle_tts_lang_change(data):
+    assistant = global_assistant
+    lang = data.get('lang')
+    
+    # Vérifier que la langue est prise en charge (fr ou en)
+    if lang in ['fr', 'en']:
+        # Réinitialiser l'historique de conversation lors du changement de langue
+        assistant.conversation_history = []
+        assistant.tts_lang = lang
+        
+        # Messages de statut adaptés à la langue
+        status_message = 'Langue changée pour le français' if lang == 'fr' else 'Language changed to English'
+        print(f"Langue changée pour {lang}")
+        emit('status', {'message': status_message})
+    else:
+        error_message = 'Langue non prise en charge' if assistant.tts_lang == 'fr' else 'Language not supported'
+        emit('error', {'message': f'{error_message}: {lang}'})
+
 @socketio.on('text_input')
 def handle_text_input(data):
     assistant = global_assistant
     texte = data['text']
     
-    # Check for exit phrases
-    mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
+    # Mots d'arrêt dans les deux langues
+    mots_arret_fr = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
+    mots_arret_en = ["goodbye", "bye", "stop", "end", "terminate", "exit", "quit", "ciao"]
+    
+    # Vérifier la langue et utiliser les mots d'arrêt correspondants
+    mots_arret = mots_arret_fr if assistant.tts_lang == "fr" else mots_arret_en
     is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
     
     if is_exit_phrase:
-        response = "Au revoir! À bientôt."
+        # Message d'au revoir adapté à la langue
+        response = "Au revoir! À bientôt." if assistant.tts_lang == "fr" else "Goodbye! See you soon."
         audio_base64, _ = assistant.parler(response)
         emit('response', {
             'text': response,
