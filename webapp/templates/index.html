@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Vocal Français</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Assistant Vocal Français</h1>
+            <p>Propulsé par Gemma 3:12B & Ollama</p>
+        </header>
+
+        <div class="conversation-container">
+            <div id="conversation" class="conversation">
+                <div class="message assistant">
+                    <div class="message-content">
+                        <p>Bonjour! Je suis votre assistant vocal français. Comment puis-je vous aider?</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="text-input-container">
+                <input type="text" id="text-input" placeholder="Écrivez votre message ici...">
+                <button id="send-text">Envoyer</button>
+            </div>
+            
+            <div class="voice-controls">
+                <button id="start-recording" class="record-btn">
+                    <span class="icon">🎤</span> Parler
+                </button>
+                <div id="recording-status" class="recording-status">
+                    <div class="recording-indicator"></div>
+                    <span>Inactive</span>
+                </div>
+                <div class="auto-listen-container">
+                    <input type="checkbox" id="auto-listen-toggle" checked>
+                    <label for="auto-listen-toggle">Écoute automatique</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-container">
+            <p id="status-message">Connecté au serveur</p>
+        </div>
+    </div>
+
+    <audio id="audio-player" style="display: none;"></audio>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

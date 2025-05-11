@@ -1,0 +1,271 @@
+/* Main Styles for Voice Assistant Web App */
+:root {
+    --primary-color: #3a7bd5;
+    --secondary-color: #00d2ff;
+    --text-color: #333;
+    --light-bg: #f5f7fa;
+    --assistant-bg: #e9f3ff;
+    --user-bg: #f0f2f5;
+    --border-radius: 10px;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-color);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 40px);
+}
+
+header {
+    background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+header h1 {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+header p {
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.conversation-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background-color: var(--light-bg);
+}
+
+.conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 80%;
+    border-radius: var(--border-radius);
+    padding: 12px 15px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.assistant {
+    align-self: flex-start;
+    background-color: var(--assistant-bg);
+    border-bottom-left-radius: 2px;
+}
+
+.message.user {
+    align-self: flex-end;
+    background-color: var(--user-bg);
+    border-bottom-right-radius: 2px;
+}
+
+.message-content p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.controls {
+    padding: 15px 20px;
+    background-color: white;
+    border-top: 1px solid #eaeaea;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.text-input-container {
+    display: flex;
+    gap: 10px;
+}
+
+#text-input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+#text-input:focus {
+    border-color: var(--primary-color);
+}
+
+#send-text {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 0 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+
+#send-text:hover {
+    background-color: #2d62b3;
+}
+
+.voice-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.record-btn {
+    background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 12px 25px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.record-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(58, 123, 213, 0.3);
+}
+
+.record-btn.recording {
+    background: linear-gradient(90deg, #e53935 0%, #e35d5b 100%);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(229, 57, 53, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
+.recording-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.recording-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #aaa;
+}
+
+.recording-indicator.active {
+    background-color: #e53935;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-container {
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-top: 1px solid #eaeaea;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+/* Styles for auto-listen toggle */
+.auto-listen-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #666;
+    margin-left: auto;
+}
+
+#auto-listen-toggle {
+    appearance: none;
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#auto-listen-toggle:checked {
+    background-color: var(--primary-color);
+}
+
+#auto-listen-toggle:before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s;
+}
+
+#auto-listen-toggle:checked:before {
+    transform: translateX(16px);
+}
+
+.auto-listen-container label {
+    cursor: pointer;
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+    .container {
+        height: calc(100vh - 20px);
+    }
+    
+    .message {
+        max-width: 90%;
+    }
+    
+    .controls {
+        padding: 10px 15px;
+    }
+}
