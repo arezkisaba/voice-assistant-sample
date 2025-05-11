@@ -358,8 +358,8 @@ def handle_tts_lang_change(data):
     
     # Vérifier que la langue est prise en charge (fr ou en)
     if lang in ['fr', 'en']:
-        # Réinitialiser l'historique de conversation lors du changement de langue
-        assistant.conversation_history = []
+        # Ne pas réinitialiser l'historique de conversation lors du changement de langue
+        # pour conserver le contexte de la conversation
         assistant.tts_lang = lang
         
         # Messages de statut adaptés à la langue
