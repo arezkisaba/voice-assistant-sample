@@ -14,6 +14,8 @@ const recordingText = recordingStatus.querySelector('span');
 const statusMessage = document.getElementById('status-message');
 const audioPlayer = document.getElementById('audio-player');
 const autoListenToggle = document.getElementById('auto-listen-toggle');
+const assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
+const userLoadingIndicator = document.getElementById('user-loading-indicator');
 
 // Recording variables
 let mediaRecorder;
@@ -25,9 +27,10 @@ let audioContext;
 let analyser;
 let silenceThreshold = 15; // Valeur ajustée en fonction des observations réelles
 let silenceFrames = 0;
-let requiredSilenceFrames = 20; // Environ 0.3 sec à 60fps
+let requiredSilenceFrames = 35; // Augmenté à 35 frames (environ 0.6 sec à 60fps)
 let audioBuffer = []; // Pour stocker les données audio brutes
 let audioSampleRate = 0;
+let hasSpokenDetected = false; // Nouvelle variable pour suivre si l'utilisateur a commencé à parler
 
 // Initialize the application
 function init() {
@@ -69,10 +72,20 @@ function setupSocketListeners() {
     });
     
     socket.on('transcript', (data) => {
+        hideUserLoading(); // Masquer l'indicateur de chargement de l'utilisateur
         addMessage('user', data.text);
+        showAssistantLoading(); // Afficher l'indicateur de chargement de l'assistant
     });
     
     socket.on('response', (data) => {
+        // Masquer l'indicateur de chargement de l'assistant
+        hideAssistantLoading();
+        
+        // Réactiver les contrôles
+        sendTextBtn.disabled = false;
+        textInput.disabled = false;
+        
+        // Afficher la réponse
         addMessage('assistant', data.text);
         if (data.audio) {
             playAudio(data.audio);
@@ -83,6 +96,12 @@ function setupSocketListeners() {
     });
     
     socket.on('error', (data) => {
+        // Masquer les indicateurs de chargement et réactiver les contrôles en cas d'erreur
+        hideAssistantLoading();
+        hideUserLoading();
+        sendTextBtn.disabled = false;
+        textInput.disabled = false;
+        
         setStatus(data.message, true);
     });
     
@@ -106,13 +125,46 @@ function handleAudioPlaybackEnded() {
     }
 }
 
+// Show the assistant loading indicator (left side)
+function showAssistantLoading() {
+    // Positionner l'indicateur de chargement après le dernier message
+    const conversation = document.getElementById('conversation');
+    conversation.insertAdjacentElement('afterend', assistantLoadingIndicator);
+    
+    // Activer l'indicateur
+    assistantLoadingIndicator.classList.add('active');
+    scrollToBottom();
+}
+
+// Hide the assistant loading indicator
+function hideAssistantLoading() {
+    assistantLoadingIndicator.classList.remove('active');
+}
+
+// Show the user loading indicator (right side)
+function showUserLoading() {
+    // Simplement activer l'indicateur
+    userLoadingIndicator.classList.add('active');
+    scrollToBottom();
+}
+
+// Hide the user loading indicator
+function hideUserLoading() {
+    userLoadingIndicator.classList.remove('active');
+}
+
 // Send text message
 function sendTextMessage() {
     const text = textInput.value.trim();
     if (text) {
         addMessage('user', text);
+        showAssistantLoading(); // Afficher l'indicateur de chargement de l'assistant
         socket.emit('text_input', { text });
         textInput.value = '';
+        
+        // Désactiver le bouton d'envoi et le champ de texte pendant le chargement
+        sendTextBtn.disabled = true;
+        textInput.disabled = true;
     }
 }
 
@@ -142,6 +194,23 @@ async function startRecording() {
     }
     
     try {
+        // S'assurer que toute ressource audio précédente est correctement fermée
+        if (audioContext && audioContext.state !== 'closed') {
+            try {
+                await audioContext.close();
+            } catch (e) {
+                console.log("Erreur lors de la fermeture du contexte audio précédent:", e);
+            }
+        }
+        
+        // Réinitialiser toutes les variables
+        isRecording = false;
+        silenceDetectionEnabled = false;
+        silenceFrames = 0;
+        hasSpokenDetected = false;
+        audioContext = null;
+        analyser = null;
+        
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
@@ -165,13 +234,14 @@ async function startRecording() {
             stream.getTracks().forEach(track => track.stop());
             if (audioContext) {
                 if (audioContext.state !== 'closed') {
-                    audioContext.close();
+                    audioContext.close().catch(e => console.log("Erreur fermeture AudioContext:", e));
                 }
             }
             
             // Réinitialiser la détection de silence
             silenceDetectionEnabled = false;
             silenceFrames = 0;
+            hasSpokenDetected = false;
         });
         
         // Start recording
@@ -244,15 +314,22 @@ function checkSilence() {
     const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
     
     // Debug information
-    console.log(`Audio level: ${average.toFixed(1)}, threshold: ${silenceThreshold}, frames: ${silenceFrames}/${requiredSilenceFrames}`);
+    console.log(`Audio level: ${average.toFixed(1)}, threshold: ${silenceThreshold}, hasSpoken: ${hasSpokenDetected}, frames: ${silenceFrames}/${requiredSilenceFrames}`);
     
-    // Si nous sommes en mode de détection de silence et que le son est en dessous du seuil
-    if (silenceDetectionEnabled) {
+    // Détecter si l'utilisateur a commencé à parler
+    if (!hasSpokenDetected && average > silenceThreshold) {
+        console.log('Voix détectée, début de parole');
+        hasSpokenDetected = true;
+    }
+    
+    // Si nous sommes en mode de détection de silence et que l'utilisateur a déjà parlé
+    if (silenceDetectionEnabled && hasSpokenDetected) {
         // Si le niveau est très bas, considérer comme silence
         if (average < silenceThreshold) {
             silenceFrames++;
+            console.log(`Silence après parole: ${silenceFrames}/${requiredSilenceFrames}`);
             if (silenceFrames >= requiredSilenceFrames) {
-                console.log('Silence détecté, arrêt de l\'enregistrement');
+                console.log('Silence après parole détecté, arrêt de l\'enregistrement');
                 stopRecording();
                 return;
             }
@@ -282,11 +359,17 @@ function stopRecording() {
         
         // Stop the server's listening process
         socket.emit('stop_listening');
+        
+        // Réinitialiser la détection de parole
+        hasSpokenDetected = false;
     }
 }
 
 // Process recorded audio
 function processAudio(audioBlob) {
+    // Afficher l'indicateur de chargement de l'utilisateur avant d'envoyer l'audio
+    showUserLoading();
+    
     const reader = new FileReader();
     reader.onloadend = () => {
         const audioData = reader.result;
@@ -314,9 +397,16 @@ function addMessage(sender, text) {
     scrollToBottom();
 }
 
-// Scroll conversation to the bottom
+// Scroll conversation to the bottom with smooth animation
 function scrollToBottom() {
-    conversation.scrollTop = conversation.scrollHeight;
+    // Utiliser requestAnimationFrame pour s'assurer que le DOM est mis à jour
+    requestAnimationFrame(() => {
+        const scrollContainer = document.querySelector('.conversation-container');
+        scrollContainer.scrollTo({
+            top: scrollContainer.scrollHeight,
+            behavior: 'smooth'
+        });
+    });
 }
 
 // Set status message

@@ -68,7 +68,7 @@ class WebAssistant:
             tts.save(temp_file)
             
             # Accélérer l'audio avec ffmpeg (similaire à main.py)
-            speed_factor = 1.3
+            speed_factor = 1.5  # Augmenté de 1.3 à 1.5 pour une lecture plus rapide
             cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={speed_factor}\" -vn {temp_file_fast}"
             os.system(cmd)
             

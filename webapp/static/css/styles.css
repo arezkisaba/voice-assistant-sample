@@ -255,6 +255,81 @@ header p {
     cursor: pointer;
 }
 
+/* Styles pour les indicateurs de chargement */
+.loading-indicator {
+    display: none; /* Caché par défaut */
+    margin: 10px 0;
+    padding: 0;
+    width: auto;
+}
+
+.loading-indicator.active {
+    display: block;
+}
+
+/* Positionnement du loader de l'assistant (à gauche) */
+.assistant-loading {
+    align-self: flex-start;
+}
+
+/* Positionnement du loader de l'utilisateur (à droite) */
+.user-loading {
+    right: 20px;
+    z-index: 100;
+    text-align: right;
+}
+
+.typing-indicator {
+    background-color: var(--assistant-bg);
+    padding: 10px 15px;
+    border-radius: var(--border-radius);
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Style spécifique au loader de l'assistant */
+.assistant-loading .typing-indicator {
+    background-color: var(--assistant-bg);
+    border-bottom-left-radius: 2px; /* Même style que les bulles de l'assistant */
+}
+
+/* Style spécifique au loader de l'utilisateur */
+.user-loading .typing-indicator {
+    background-color: var(--user-bg);
+    border-bottom-right-radius: 2px; /* Même style que les bulles de l'utilisateur */
+}
+
+.typing-indicator span {
+    height: 8px;
+    width: 8px;
+    background: var(--primary-color);
+    display: block;
+    border-radius: 50%;
+    opacity: 0.4;
+    margin: 0 3px;
+    animation: typing 1s infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes typing {
+    0% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.4; transform: scale(1); }
+}
+
 /* Responsive design */
 @media (max-width: 600px) {
     .container {
