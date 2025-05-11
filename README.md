@@ -1,6 +1,8 @@
-# Description
+# Voice Assistant Sample
 
-This project implements a French voice assistant using Python, Ollama, and the Gemma 3:12B language model. The assistant can:
+A French voice assistant powered by Python, Ollama, and Gemma 3:12B. Supports voice commands in French/English with smart audio detection and noise suppression.
+
+## Features
 
 - Listen to your voice commands in French and English
 - Process your requests through the Gemma 3:12B model
