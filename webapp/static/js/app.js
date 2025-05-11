@@ -50,20 +50,61 @@ function init() {
         autoListenToggle.checked = autoListen;
     }
     
-    // Model selector
-    if (modelSelector) {
-        modelSelector.addEventListener('change', function() {
-            currentModel = this.value;
-            socket.emit('change_model', { model: currentModel });
-            setStatus(`Modèle changé pour ${currentModel === 'gemma' ? 'Gemma 3:12B' : 'Llama 3.1:8B'}`);
-        });
-    }
+    // Charger la liste des modèles disponibles depuis l'API
+    loadAvailableModels();
     
     // Set up audio player events
     audioPlayer.addEventListener('ended', handleAudioPlaybackEnded);
     
     // Set up socket listeners
     setupSocketListeners();
+}
+
+// Charger la liste des modèles disponibles depuis l'API
+function loadAvailableModels() {
+    fetch('/models')
+        .then(response => response.json())
+        .then(data => {
+            const models = data.models;
+            populateModelSelector(models);
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des modèles:', error);
+            setStatus('Erreur lors du chargement des modèles', true);
+        });
+}
+
+// Remplir le sélecteur de modèles avec les modèles disponibles
+function populateModelSelector(models) {
+    if (!modelSelector) return;
+    
+    // Vider le sélecteur
+    modelSelector.innerHTML = '';
+    
+    // Ajouter les options pour chaque modèle disponible
+    if (Object.keys(models).length > 0) {
+        for (const [id, name] of Object.entries(models)) {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = name;
+            modelSelector.appendChild(option);
+        }
+    } else {
+        // Si aucun modèle n'est disponible, ajouter une option par défaut
+        const option = document.createElement('option');
+        option.value = 'default';
+        option.textContent = 'Aucun modèle disponible';
+        modelSelector.appendChild(option);
+        modelSelector.disabled = true;
+    }
+    
+    // Ajouter l'événement de changement de modèle
+    modelSelector.addEventListener('change', function() {
+        currentModel = this.value;
+        const selectedModelName = models[currentModel] || 'Modèle inconnu';
+        socket.emit('change_model', { model: currentModel });
+        setStatus(`Modèle changé pour ${selectedModelName}`);
+    });
 }
 
 // Set up Socket.io event listeners

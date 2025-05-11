@@ -22,12 +22,14 @@ from flask_socketio import SocketIO, emit
 from gtts import gTTS
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-# Modèles disponibles
-MODELS = {
-    "gemma": "gemma3:12b",
-    "llama": "llama3.1:8b"
-}
-DEFAULT_MODEL = "gemma"
+OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+
+# Modèle par défaut au cas où la récupération échoue
+DEFAULT_MODEL = "gemma3:12b"
+
+# Variable globale pour stocker les modèles disponibles
+AVAILABLE_MODELS = {}
+
 SYSTEM_PROMPT = """Tu es un assistant vocal français intelligent et serviable. 
 Réponds de manière claire et concise, idéalement en 2-3 phrases. 
 Privilégie la simplicité et la clarté dans tes réponses."""
@@ -111,7 +113,7 @@ class WebAssistant:
         prompt = f"{context}\nUtilisateur: {question}\nAssistant:"
         
         payload = {
-            "model": MODELS[DEFAULT_MODEL],
+            "model": DEFAULT_MODEL,
             "prompt": prompt,
             "system": SYSTEM_PROMPT,
             "stream": False,
@@ -191,16 +193,25 @@ class WebAssistant:
             return None
 
 def verifier_ollama():
+    global AVAILABLE_MODELS
     try:
-        response = requests.get("http://localhost:11434/api/tags")
+        response = requests.get(OLLAMA_TAGS_URL)
         if response.status_code != 200:
             return False, "Ollama n'est pas accessible"
         
         models = response.json().get("models", [])
-        model_names = [model.get("name") for model in models]
+        AVAILABLE_MODELS = {}
+        for model in models:
+            model_name = model.get("name")
+            if ':' in model_name:  # If model name already includes a tag
+                AVAILABLE_MODELS[model_name] = model_name
+            else:
+                model_tag = model.get("tag")
+                full_model_name = f"{model_name}:{model_tag}" if model_tag != "latest" else model_name
+                AVAILABLE_MODELS[full_model_name] = full_model_name
         
-        if MODELS[DEFAULT_MODEL] not in model_names:
-            return False, f"Le modèle {MODELS[DEFAULT_MODEL]} n'est pas téléchargé. Exécutez: ollama pull {MODELS[DEFAULT_MODEL]}"
+        if DEFAULT_MODEL not in AVAILABLE_MODELS:
+            return False, f"Le modèle {DEFAULT_MODEL} n'est pas téléchargé. Exécutez: ollama pull {DEFAULT_MODEL}"
         
         return True, "OK"
     except Exception as e:
@@ -251,6 +262,10 @@ def process_audio_queue():
             print(f"Error in processing thread: {e}")
             socketio.emit('error', {'message': f'Erreur: {str(e)}'})
 
+@app.route('/models')
+def get_models():
+    return jsonify({"models": AVAILABLE_MODELS})
+
 @app.route('/service-worker.js')
 def serve_service_worker():
     # Servir le service worker depuis la racine, ce qui est essentiel pour les PWA
@@ -295,10 +310,10 @@ def handle_audio_data(data):
 def handle_model_change(data):
     global DEFAULT_MODEL
     model = data.get('model')
-    if model in MODELS:
+    if model in AVAILABLE_MODELS:
         DEFAULT_MODEL = model
-        print(f"Modèle changé pour {MODELS[DEFAULT_MODEL]}")
-        emit('status', {'message': f'Modèle changé pour {MODELS[DEFAULT_MODEL]}'})
+        print(f"Modèle changé pour {DEFAULT_MODEL}")
+        emit('status', {'message': f'Modèle changé pour {DEFAULT_MODEL}'})
     else:
         emit('error', {'message': f'Modèle inconnu: {model}'})
 
@@ -335,7 +350,7 @@ if __name__ == '__main__':
     if not ollama_ok:
         print(f"❌ {message}")
     else:
-        print(f"✅ Ollama est prêt avec le modèle {MODELS[DEFAULT_MODEL]}")
+        print(f"✅ Ollama est prêt avec le modèle {DEFAULT_MODEL}")
         
         # Parse command line arguments
         parser = argparse.ArgumentParser(description='Voice Assistant Web App')
