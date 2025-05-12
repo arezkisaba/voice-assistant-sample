@@ -141,3 +141,11 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
                 'audio': audio_base64,
                 'lastUserMessage': texte
             })
+            
+    @socketio.on('cancel_speech')
+    def handle_cancel_speech():
+        """Annuler la synthèse vocale en cours"""
+        CANCEL_SPEECH_SYNTHESIS[0] = True
+        status_message = RESPONSE_MESSAGES[global_assistant.tts_lang]["speech_cancelled"]
+        print("Synthèse vocale annulée par l'utilisateur")
+        emit('status', {'message': status_message})

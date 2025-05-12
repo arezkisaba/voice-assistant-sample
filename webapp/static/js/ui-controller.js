@@ -8,6 +8,7 @@ class UIController {
             recordingStatus: null,
             recordingIndicator: null,
             recordingText: null,
+            cancelSpeechBtn: null,
             statusMessage: null,
             audioPlayer: null,
             assistantLoadingIndicator: null,
@@ -24,6 +25,7 @@ class UIController {
         this.elements.recordingStatus = document.getElementById('recording-status');
         this.elements.recordingIndicator = this.elements.recordingStatus.querySelector('.recording-indicator');
         this.elements.recordingText = this.elements.recordingStatus.querySelector('span');
+        this.elements.cancelSpeechBtn = document.getElementById('cancel-speech');
         this.elements.statusMessage = document.getElementById('status-message');
         this.elements.audioPlayer = document.getElementById('audio-player');
         this.elements.assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
@@ -78,14 +80,39 @@ class UIController {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         
-        const paragraph = document.createElement('p');
-        paragraph.textContent = text;
+        // Vérifier si le texte contient du Markdown
+        const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s)/.test(text);
         
-        contentDiv.appendChild(paragraph);
+        if (hasMarkdown && sender === 'assistant') {
+            // Utilisation de la bibliothèque marked pour rendre le Markdown
+            contentDiv.innerHTML = marked.parse(text);
+            
+            // Ajouter une classe pour le formatage Markdown
+            contentDiv.classList.add('markdown-content');
+            
+            // Ajouter des styles pour les blocs de code si présents
+            if (text.includes('```')) {
+                this.applyCodeHighlighting(contentDiv);
+            }
+        } else {
+            // Texte normal sans formatage Markdown
+            const paragraph = document.createElement('p');
+            paragraph.textContent = text;
+            contentDiv.appendChild(paragraph);
+        }
+        
         messageDiv.appendChild(contentDiv);
         this.elements.conversation.appendChild(messageDiv);
         
         this.scrollToBottom();
+    }
+    
+    applyCodeHighlighting(contentElement) {
+        // Parcourir tous les blocs de code et ajouter des classes CSS
+        const codeBlocks = contentElement.querySelectorAll('pre code');
+        codeBlocks.forEach(block => {
+            block.classList.add('hljs');
+        });
     }
 
     scrollToBottom() {
@@ -108,7 +135,30 @@ class UIController {
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
         
+        // Mettre à jour le texte et afficher l'indicateur que l'assistant parle
         this.elements.recordingText.textContent = 'Assistant parle...';
+        this.elements.recordingStatus.classList.add('speaking');
+        
+        // Afficher le bouton d'annulation de la synthèse vocale
+        if (this.elements.cancelSpeechBtn) {
+            this.elements.cancelSpeechBtn.classList.remove('hidden');
+        }
+        
+        // Ajouter un gestionnaire d'événement pour lorsque l'audio se termine
+        this.elements.audioPlayer.onended = () => {
+            this.stopSpeaking();
+        };
+    }
+    
+    stopSpeaking() {
+        // Masquer le bouton d'annulation et réinitialiser le statut
+        if (this.elements.cancelSpeechBtn) {
+            this.elements.cancelSpeechBtn.classList.add('hidden');
+        }
+        
+        // Réinitialiser l'indicateur d'état
+        this.elements.recordingStatus.classList.remove('speaking');
+        this.elements.recordingText.textContent = 'Inactive';
     }
 
     clearInput() {

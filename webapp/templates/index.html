@@ -17,6 +17,9 @@
     
     <!-- Styles et scripts -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
 </head>
 <body>
@@ -60,23 +63,30 @@
             </div>
             
             <div class="voice-controls">
-                <button id="start-recording" class="record-btn">
-                    <span class="icon">🎤</span> Parler
-                </button>
-                <div id="recording-status" class="recording-status">
-                    <div class="recording-indicator"></div>
-                    <span>Inactive</span>
+                <div class="voice-controls-left">
+                    <button id="start-recording" class="record-btn">
+                        <span class="icon">🎤</span> Parler
+                    </button>
+                    <div id="recording-status" class="recording-status">
+                        <div class="recording-indicator"></div>
+                        <span>Inactive</span>
+                        <button id="cancel-speech" class="cancel-speech-btn hidden">
+                            <span class="icon">🔇</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="tts-lang-selector-container">
-                    <select id="tts-lang-selector">
-                        <option value="fr">Français (TTS)</option>
-                        <option value="en">English (TTS)</option>
-                    </select>
-                </div>
-                <div class="model-selector-container">
-                    <select id="model-selector">
-                        <!-- Les options seront ajoutées dynamiquement par JavaScript -->
-                    </select>
+                <div class="voice-controls-right">
+                    <div class="tts-lang-selector-container">
+                        <select id="tts-lang-selector">
+                            <option value="fr">Français (TTS)</option>
+                            <option value="en">English (TTS)</option>
+                        </select>
+                    </div>
+                    <div class="model-selector-container">
+                        <select id="model-selector">
+                            <!-- Les options seront ajoutées dynamiquement par JavaScript -->
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>

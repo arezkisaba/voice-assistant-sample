@@ -5,6 +5,8 @@ import re
 import tempfile
 import base64
 import queue
+import markdown
+import html
 from flask import Flask
 from flask_socketio import SocketIO
 from gtts import gTTS
@@ -32,18 +34,37 @@ class WebAssistant:
         self.speech_lang_map = SPEECH_LANG_MAP
 
     def parler(self, texte):
-        texte = self._nettoyer_texte(texte)
+        # Réinitialiser le flag d'annulation avant de commencer
+        CANCEL_SPEECH_SYNTHESIS[0] = False
+        
+        # Convertir le markdown en texte pour la synthèse vocale
+        texte_brut = self._markdown_to_text(texte)
+        texte_brut = self._nettoyer_texte(texte_brut)
         
         try:
-            tts = gTTS(text=texte, lang=self.tts_lang, slow=False)
+            tts = gTTS(text=texte_brut, lang=self.tts_lang, slow=False)
             
             timestamp = int(time.time())
             temp_file = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}.mp3")
             temp_file_fast = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}_fast.mp3")
             tts.save(temp_file)
             
+            # Vérifier si l'annulation a été demandée après la génération du fichier
+            if CANCEL_SPEECH_SYNTHESIS[0]:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                return None, RESPONSE_MESSAGES[self.tts_lang]["speech_cancelled"]
+            
             cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast}"
             os.system(cmd)
+            
+            # Vérifier à nouveau si l'annulation a été demandée
+            if CANCEL_SPEECH_SYNTHESIS[0]:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                if os.path.exists(temp_file_fast):
+                    os.remove(temp_file_fast)
+                return None, RESPONSE_MESSAGES[self.tts_lang]["speech_cancelled"]
             
             audio_file = temp_file_fast if os.path.exists(temp_file_fast) else temp_file
             
@@ -65,6 +86,86 @@ class WebAssistant:
             print(f"❌ Erreur lors de la synthèse vocale: {e}")
             return None, texte
     
+    def _markdown_to_text(self, markdown_text):
+        """Convertit le markdown en texte brut pour la synthèse vocale."""
+        if not markdown_text:
+            return ""
+            
+        # Supprimer complètement les blocs de code
+        text = re.sub(r'```[\s\S]*?```', '', markdown_text)
+        
+        # Supprimer les backticks simples (code inline)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        
+        # Supprimer les balises HTML
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Convertir les liens [texte](url) en texte uniquement
+        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        
+        # Supprimer les symboles de titre (#)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les symboles de liste (*, -, +)
+        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les listes numériques
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les symboles d'emphase (* et _) pour le gras et l'italique
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Gras **texte**
+        text = re.sub(r'__(.*?)__', r'\1', text)      # Gras __texte__
+        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italique *texte*
+        text = re.sub(r'_(.*?)_', r'\1', text)        # Italique _texte_
+        
+        # Supprimer les symboles de citation (>)
+        text = re.sub(r'^\s*>\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les barres horizontales (---, ___, ***)
+        text = re.sub(r'^\s*([-_*])\1{2,}\s*$', '', text, flags=re.MULTILINE)
+        
+        # Remplacer les tableaux par une indication simple
+        if '|' in text and re.search(r'[-|]+', text):
+            # Détection améliorée des tableaux
+            lines = text.split('\n')
+            in_table = False
+            table_lines = []
+            
+            for i, line in enumerate(lines):
+                if '|' in line:
+                    if not in_table:
+                        in_table = True
+                    table_lines.append(i)
+                elif in_table and not line.strip():
+                    # Ligne vide après un tableau
+                    in_table = False
+            
+            if table_lines:
+                # Nombre de tableaux détectés
+                table_count = 1
+                prev_line = -2
+                
+                for line_num in table_lines:
+                    if line_num > prev_line + 1:
+                        table_count += 1
+                    prev_line = line_num
+                
+                # Remplacer chaque tableau par une description simple
+                text_lines = text.split('\n')
+                for i in sorted(table_lines, reverse=True):
+                    if i < len(text_lines):
+                        text_lines.pop(i)
+                        if i == table_lines[0]:
+                            text_lines.insert(i, f"[Tableau]")
+                
+                text = '\n'.join(text_lines)
+        
+        # Supprimer les espaces et retours à la ligne superflus
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = text.strip()
+        
+        return text
+    
     def _nettoyer_texte(self, texte):
         texte = re.sub(r'(\d+)\.(\d+)', r'\1 virgule \2', texte)
         texte = re.sub(r'(\w+)\.(\w+)', r'\1 point \2', texte)
@@ -79,7 +180,7 @@ class WebAssistant:
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
         
         payload = {
-            "model": MODEL_REF[0],  # Utiliser la référence au modèle
+            "model": MODEL_REF[0],
             "prompt": prompt,
             "system": system_prompt,
             "stream": False,
@@ -195,12 +296,12 @@ if __name__ == '__main__':
     else:
         print(f"✅ Ollama est prêt avec le modèle {MODEL_REF[0]}")
         
-        cert_path = 'cert.pem'
-        key_path = 'key.pem'
+        cert_path = '/home/arezkisaba/git/voice-assistant-sample/webapp/certs/192.168.1.100+3.pem'
+        key_path = '/home/arezkisaba/git/voice-assistant-sample/webapp/certs/192.168.1.100+3-key.pem'
         
-        if not (os.path.exists(cert_path) and os.path.exists(key_path)):
-            print("🔐 Generating self-signed SSL certificate...")
-            os.system(f'openssl req -x509 -newkey rsa:4096 -nodes -out {cert_path} -keyout {key_path} -days 365 -subj "/CN=localhost"')
+        # if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        #     print("🔐 Generating self-signed SSL certificate...")
+        #     os.system(f'openssl req -x509 -newkey rsa:4096 -nodes -out {cert_path} -keyout {key_path} -days 365 -subj "/CN=localhost"')
         
         print("🔒 Starting server with HTTPS enabled")
         socketio.run(

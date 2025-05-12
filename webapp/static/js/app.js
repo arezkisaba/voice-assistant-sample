@@ -4,6 +4,16 @@ import audioRecorder from './audio-recorder.js';
 import socketManager from './socket-manager.js';
 import modelsManager from './models-manager.js';
 
+// Configurer marked.js pour utiliser highlight.js
+marked.setOptions({
+    highlight: function(code, language) {
+        const validLanguage = hljs.getLanguage(language) ? language : 'plaintext';
+        return hljs.highlight(code, { language: validLanguage }).value;
+    },
+    breaks: true,  // Activer les sauts de ligne
+    gfm: true      // Activer GitHub Flavored Markdown
+});
+
 class App {
     constructor() {
     }
@@ -29,6 +39,12 @@ class App {
         uiController.elements.textInput.addEventListener('keypress', this.handleTextInputKeypress.bind(this));
         uiController.elements.startRecordingBtn.addEventListener('click', this.handleToggleRecording.bind(this));
         uiController.elements.audioPlayer.addEventListener('ended', this.handleAudioPlaybackEnded.bind(this));
+        
+        // Ajout du gestionnaire d'événement pour le bouton d'annulation de la synthèse vocale
+        const cancelSpeechBtn = document.getElementById('cancel-speech');
+        if (cancelSpeechBtn) {
+            cancelSpeechBtn.addEventListener('click', this.handleCancelSpeech.bind(this));
+        }
     }
 
     handleSendTextMessage() {
@@ -62,6 +78,23 @@ class App {
         socketManager.changeTtsLang(config.currentTtsLang);
         const langLabel = config.currentTtsLang === 'fr' ? 'Français' : 'English';
         uiController.setStatus(`Langue TTS changée pour ${langLabel}`);
+    }
+
+    // Méthode pour gérer l'annulation de la synthèse vocale
+    handleCancelSpeech() {
+        const cancelSpeechBtn = document.getElementById('cancel-speech');
+        cancelSpeechBtn.classList.add('active');
+        
+        // Annuler la synthèse vocale côté serveur
+        socketManager.cancelSpeech();
+        
+        // Utiliser la méthode stopSpeaking de uiController pour réinitialiser l'interface
+        uiController.stopSpeaking();
+        
+        // Désactiver visuellement le bouton après un court délai
+        setTimeout(() => {
+            cancelSpeechBtn.classList.remove('active');
+        }, 300);
     }
 }
 

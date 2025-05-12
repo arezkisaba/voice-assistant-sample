@@ -44,11 +44,13 @@ ERROR_MESSAGES = {
 RESPONSE_MESSAGES = {
     "fr": {
         "goodbye": "Au revoir! À bientôt.",
-        "language_changed": "Langue changée pour le français"
+        "language_changed": "Langue changée pour le français",
+        "speech_cancelled": "Synthèse vocale annulée"
     },
     "en": {
         "goodbye": "Goodbye! See you soon.",
-        "language_changed": "Language changed to English"
+        "language_changed": "Language changed to English",
+        "speech_cancelled": "Speech synthesis cancelled"
     }
 }
 
@@ -59,4 +61,7 @@ OLLAMA_OPTIONS = {
     "top_p": 0.9
 }
 
-AUDIO_SPEED_FACTOR = 2.0
+AUDIO_SPEED_FACTOR = 1.5
+
+# Flag pour gérer l'annulation de la synthèse vocale
+CANCEL_SPEECH_SYNTHESIS = [False]

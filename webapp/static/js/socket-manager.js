@@ -96,6 +96,16 @@ class SocketManager {
     changeTtsLang(lang) {
         this.socket.emit('change_tts_lang', { lang });
     }
+    
+    cancelSpeech() {
+        this.socket.emit('cancel_speech');
+        // Arrêter l'audio en cours de lecture également
+        const audioPlayer = document.getElementById('audio-player');
+        if (audioPlayer) {
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+        }
+    }
 }
 
 const socketManager = new SocketManager();

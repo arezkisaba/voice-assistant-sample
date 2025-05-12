@@ -143,6 +143,21 @@ header p {
     display: flex;
     align-items: center;
     gap: 15px;
+    justify-content: space-between; /* Ajoute l'espacement entre les éléments gauche et droite */
+    flex-wrap: wrap; /* Permet le retour à la ligne sur les petits écrans */
+}
+
+.voice-controls-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.voice-controls-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto; /* Pousse les éléments vers la droite */
 }
 
 .record-btn {
@@ -169,6 +184,33 @@ header p {
     animation: pulse 1.5s infinite;
 }
 
+.cancel-btn {
+    background: #777;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+    opacity: 0.7;
+}
+
+.cancel-btn:hover {
+    transform: translateY(-2px);
+    opacity: 1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cancel-btn.active {
+    background: #e53935;
+    opacity: 1;
+    animation: pulse 1.5s infinite;
+}
+
 @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4); }
     70% { box-shadow: 0 0 0 10px rgba(229, 57, 53, 0); }
@@ -181,6 +223,7 @@ header p {
     gap: 8px;
     font-size: 0.9rem;
     color: #666;
+    position: relative;
 }
 
 .recording-indicator {
@@ -193,6 +236,41 @@ header p {
 .recording-indicator.active {
     background-color: #e53935;
     animation: blink 1s infinite;
+}
+
+.cancel-speech-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-left: 4px;
+    padding: 4px 8px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.cancel-speech-btn:hover {
+    background-color: rgba(229, 57, 53, 0.1);
+    color: #e53935;
+    opacity: 1;
+}
+
+.cancel-speech-btn.active {
+    background-color: rgba(229, 57, 53, 0.2);
+    color: #e53935;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.speaking .recording-indicator {
+    background-color: #3a7bd5;
+    animation: pulse 1.5s infinite;
 }
 
 @keyframes blink {
@@ -346,6 +424,103 @@ header p {
 #tts-lang-selector:focus {
     border-color: var(--primary-color);
     outline: none;
+}
+
+/* Styles pour le contenu Markdown */
+.markdown-content {
+    line-height: 1.6;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+}
+
+.markdown-content h1 { font-size: 1.5em; }
+.markdown-content h2 { font-size: 1.3em; }
+.markdown-content h3 { font-size: 1.2em; }
+.markdown-content h4 { font-size: 1.1em; }
+.markdown-content h5, .markdown-content h6 { font-size: 1em; }
+
+.markdown-content p {
+    margin-bottom: 1em;
+}
+
+.markdown-content ul, 
+.markdown-content ol {
+    margin-left: 1.5em;
+    margin-bottom: 1em;
+}
+
+.markdown-content li {
+    margin-bottom: 0.3em;
+}
+
+.markdown-content blockquote {
+    border-left: 3px solid var(--primary-color);
+    padding-left: 1em;
+    margin-left: 0;
+    margin-right: 0;
+    font-style: italic;
+    color: #666;
+}
+
+.markdown-content code {
+    font-family: 'Courier New', Courier, monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: #f5f7fa;
+    padding: 1em;
+    border-radius: var(--border-radius);
+    overflow-x: auto;
+    margin: 1em 0;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.9em;
+    display: block;
+}
+
+.markdown-content a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+    border: 1px solid #ddd;
+    padding: 0.5em;
+    text-align: left;
+}
+
+.markdown-content table th {
+    background-color: rgba(0, 0, 0, 0.05);
+    font-weight: 600;
+}
+
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 3px;
 }
 
 @media (max-width: 600px) {
