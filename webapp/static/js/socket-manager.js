@@ -42,7 +42,6 @@ class SocketManager {
             );
             
             if (userSaidGoodbye) {
-                // Set manualStopped to true to prevent auto-restart of recording
                 config.manualStopped = true;
             }
             
@@ -104,7 +103,6 @@ class SocketManager {
     
     cancelSpeech() {
         this.socket.emit('cancel_speech');
-        // Arrêter l'audio en cours de lecture également
         const audioPlayer = document.getElementById('audio-player');
         if (audioPlayer) {
             audioPlayer.pause();

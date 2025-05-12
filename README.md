@@ -42,3 +42,6 @@ python3.11 ./src/scripts/main.py
 ````
 
 OpenRouter
+RAG => Ajout données contextuelles moi
+Rendu phrase par phrase
+Auto-scroll during stream result
