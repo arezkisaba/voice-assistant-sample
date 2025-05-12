@@ -1,28 +1,26 @@
 import os
 import requests
 import time
-import argparse
 import re
 import tempfile
 import base64
-import threading
 import queue
-from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit
+from flask import Flask
+from flask_socketio import SocketIO
 from gtts import gTTS
 from constants import *
+from routes import register_routes
 
-AVAILABLE_MODELS = {}
+AVAILABLE_MODELS = [{}]
+MODEL_REF = [DEFAULT_MODEL]
 
-app = Flask(__name__, 
-            static_folder='static',
-            template_folder='templates')
+app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['SECRET_KEY'] = FLASK_SECRET_KEY
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 audio_queue = queue.Queue()
-processing_thread = None
-is_processing = False
+is_processing_ref = [False]
+processing_thread_ref = [None]
 
 global_assistant = None
 
@@ -81,7 +79,7 @@ class WebAssistant:
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
         
         payload = {
-            "model": DEFAULT_MODEL,
+            "model": MODEL_REF[0],  # Utiliser la référence au modèle
             "prompt": prompt,
             "system": system_prompt,
             "stream": False,
@@ -153,193 +151,63 @@ class WebAssistant:
             return None
 
 def verifier_ollama():
-    global AVAILABLE_MODELS
     try:
         response = requests.get(OLLAMA_TAGS_URL)
         if response.status_code != 200:
             return False, "Ollama n'est pas accessible"
         
         models = response.json().get("models", [])
-        AVAILABLE_MODELS = {}
+        models_dict = {}
         for model in models:
             model_name = model.get("name")
             if ':' in model_name:
-                AVAILABLE_MODELS[model_name] = model_name
+                models_dict[model_name] = model_name
             else:
                 model_tag = model.get("tag")
                 full_model_name = f"{model_name}:{model_tag}" if model_tag != "latest" else model_name
-                AVAILABLE_MODELS[full_model_name] = full_model_name
+                models_dict[full_model_name] = full_model_name
         
-        if DEFAULT_MODEL not in AVAILABLE_MODELS:
-            return False, f"Le modèle {DEFAULT_MODEL} n'est pas téléchargé. Exécutez: ollama pull {DEFAULT_MODEL}"
+        AVAILABLE_MODELS[0] = models_dict
+        
+        if MODEL_REF[0] not in AVAILABLE_MODELS[0]:
+            return False, f"Le modèle {MODEL_REF[0]} n'est pas téléchargé. Exécutez: ollama pull {MODEL_REF[0]}"
         
         return True, "OK"
     except Exception as e:
         return False, f"Erreur lors de la vérification d'Ollama: {e}"
 
-def process_audio_queue():
-    global is_processing
-    assistant = global_assistant
-    
-    while is_processing:
-        try:
-            audio_data = audio_queue.get(timeout=1)
-            if audio_data:
-                texte = assistant.analyser_audio(audio_data)
-                
-                if texte:
-                    socketio.emit('transcript', {'text': texte})
-                    
-                    mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
-                    is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
-                    
-                    if is_exit_phrase:
-                        response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
-                        audio_base64, _ = assistant.parler(response)
-                        socketio.emit('response', {
-                            'text': response,
-                            'audio': audio_base64,
-                            'lastUserMessage': texte
-                        })
-                    else:
-                        response = assistant.obtenir_reponse_ollama(texte)
-                        audio_base64, _ = assistant.parler(response)
-                        socketio.emit('response', {
-                            'text': response,
-                            'audio': audio_base64,
-                            'lastUserMessage': texte
-                        })
-                else:
-                    error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
-                    socketio.emit('error', {'message': error_msg})
-            
-            audio_queue.task_done()
-        except queue.Empty:
-            pass
-        except Exception as e:
-            print(f"Error in processing thread: {e}")
-            error_prefix = "Erreur" if assistant.tts_lang == "fr" else "Error"
-            socketio.emit('error', {'message': f'{error_prefix}: {str(e)}'})
-
-@app.route('/models')
-def get_models():
-    return jsonify({"models": AVAILABLE_MODELS})
-
-@app.route('/service-worker.js')
-def serve_service_worker():
-    return app.send_static_file('js/service-worker.js')
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@socketio.on('connect')
-def handle_connect():
-    print('Client connected')
-    emit('status', {'message': 'Connecté au serveur'})
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')
-
-@socketio.on('start_listening')
-def handle_start_listening():
-    global processing_thread, is_processing
-    
-    if not is_processing:
-        is_processing = True
-        processing_thread = threading.Thread(target=process_audio_queue)
-        processing_thread.daemon = True
-        processing_thread.start()
-    
-    emit('listening_started')
-
-@socketio.on('stop_listening')
-def handle_stop_listening():
-    global is_processing
-    is_processing = False
-    emit('listening_stopped')
-
-@socketio.on('audio_data')
-def handle_audio_data(data):
-    audio_queue.put(data['audio'])
-
-@socketio.on('change_model')
-def handle_model_change(data):
-    global DEFAULT_MODEL
-    model = data.get('model')
-    if model in AVAILABLE_MODELS:
-        DEFAULT_MODEL = model
-        print(f"Modèle changé pour {DEFAULT_MODEL}")
-        emit('status', {'message': f'Modèle changé pour {DEFAULT_MODEL}'})
-    else:
-        emit('error', {'message': f'Modèle inconnu: {model}'})
-
-@socketio.on('change_tts_lang')
-def handle_tts_lang_change(data):
-    assistant = global_assistant
-    lang = data.get('lang')
-    
-    if lang in ['fr', 'en']:
-        assistant.tts_lang = lang
-        
-        status_message = RESPONSE_MESSAGES[lang]["language_changed"]
-        print(f"Langue changée pour {lang}")
-        emit('status', {'message': status_message})
-    else:
-        error_message = ERROR_MESSAGES[assistant.tts_lang]["language_not_supported"]
-        emit('error', {'message': f'{error_message}: {lang}'})
-
-@socketio.on('text_input')
-def handle_text_input(data):
-    assistant = global_assistant
-    texte = data['text']
-    
-    mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
-    is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
-    
-    if is_exit_phrase:
-        response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
-        audio_base64, _ = assistant.parler(response)
-        emit('response', {
-            'text': response,
-            'audio': audio_base64,
-            'lastUserMessage': texte
-        })
-    else:
-        response = assistant.obtenir_reponse_ollama(texte)
-        audio_base64, _ = assistant.parler(response)
-        emit('response', {
-            'text': response,
-            'audio': audio_base64,
-            'lastUserMessage': texte
-        })
-
 if __name__ == '__main__':
     global_assistant = WebAssistant()
+    register_routes(
+        app, 
+        socketio, 
+        global_assistant, 
+        audio_queue, 
+        is_processing_ref, 
+        processing_thread_ref, 
+        AVAILABLE_MODELS, 
+        MODEL_REF
+    )
+    
     ollama_ok, message = verifier_ollama()
     if not ollama_ok:
         print(f"❌ {message}")
     else:
-        print(f"✅ Ollama est prêt avec le modèle {DEFAULT_MODEL}")
+        print(f"✅ Ollama est prêt avec le modèle {MODEL_REF[0]}")
         
-        parser = argparse.ArgumentParser(description='Voice Assistant Web App')
-        parser.add_argument('--ssl', action='store_true', help='Enable HTTPS with self-signed certificate')
-        args = parser.parse_args()
+        cert_path = 'cert.pem'
+        key_path = 'key.pem'
         
-        if args.ssl:
-            cert_path = 'cert.pem'
-            key_path = 'key.pem'
-            
-            if not (os.path.exists(cert_path) and os.path.exists(key_path)):
-                print("🔐 Generating self-signed SSL certificate...")
-                os.system(f'openssl req -x509 -newkey rsa:4096 -nodes -out {cert_path} -keyout {key_path} -days 365 -subj "/CN=localhost"')
-            
-            print("🔒 Starting server with HTTPS enabled")
-            socketio.run(app, host='0.0.0.0', port=5000, debug=True, 
-                        ssl_context=(cert_path, key_path),
-                        allow_unsafe_werkzeug=True)
-        else:
-            print("⚠️ Starting server without HTTPS. Microphone access may be blocked in browsers.")
-            print("💡 Tip: Run with --ssl flag to enable HTTPS with a self-signed certificate.")
-            socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+        if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+            print("🔐 Generating self-signed SSL certificate...")
+            os.system(f'openssl req -x509 -newkey rsa:4096 -nodes -out {cert_path} -keyout {key_path} -days 365 -subj "/CN=localhost"')
+        
+        print("🔒 Starting server with HTTPS enabled")
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=5000,
+            debug=True, 
+            ssl_context=(cert_path, key_path),
+            allow_unsafe_werkzeug=True
+        )

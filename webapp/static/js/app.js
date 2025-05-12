@@ -9,7 +9,6 @@ const recordingIndicator = recordingStatus.querySelector('.recording-indicator')
 const recordingText = recordingStatus.querySelector('span');
 const statusMessage = document.getElementById('status-message');
 const audioPlayer = document.getElementById('audio-player');
-const autoListenToggle = document.getElementById('auto-listen-toggle');
 const assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
 const userLoadingIndicator = document.getElementById('user-loading-indicator');
 const modelSelector = document.getElementById('model-selector');
@@ -18,12 +17,11 @@ const ttsLangSelector = document.getElementById('tts-lang-selector');
 let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
-let autoListen = true;
 let audioContext;
 let analyser;
 let audioBuffer = [];
 let audioSampleRate = 0;
-let currentModel = "llama3.1:8b";
+let currentModel = "";
 let currentTtsLang = "fr";
 let isPlayingAudio = false;
 let continuousListening = true;
@@ -33,18 +31,6 @@ function init() {
     sendTextBtn.addEventListener('click', sendTextMessage);
     textInput.addEventListener('keypress', handleTextInputKeypress);
     startRecordingBtn.addEventListener('click', toggleRecording);
-    
-    if (autoListenToggle) {
-        autoListenToggle.addEventListener('change', function() {
-            autoListen = this.checked;
-            setStatus(autoListen ? 'Écoute automatique activée' : 'Écoute automatique désactivée');
-            
-            if (autoListen && !isRecording && !isPlayingAudio) {
-                startRecording();
-            }
-        });
-        autoListenToggle.checked = autoListen;
-    }
     
     if (ttsLangSelector) {
         ttsLangSelector.addEventListener('change', function() {
@@ -62,19 +48,23 @@ function init() {
     
     setupSocketListeners();
     
-    if (continuousListening && autoListen) {
-        setTimeout(() => {
-            startRecording();
-        }, 1000);
-    }
+    setTimeout(() => {
+        startRecording();
+    }, 1000);
 }
 
 function loadAvailableModels() {
-    fetch('/models')
+    fetch('/current-model')
+        .then(response => response.json())
+        .then(data => {
+            currentModel = data.currentModel;
+            console.log("Modèle actuel défini par le serveur:", currentModel);
+            return fetch('/models');
+        })
         .then(response => response.json())
         .then(data => {
             const models = data.models;
-            populateModelSelector(models);
+            populateModelSelector(models, currentModel);
         })
         .catch(error => {
             console.error('Erreur lors du chargement des modèles:', error);
@@ -82,7 +72,7 @@ function loadAvailableModels() {
         });
 }
 
-function populateModelSelector(models) {
+function populateModelSelector(models, defaultModel) {
     if (!modelSelector) return;
     
     modelSelector.innerHTML = '';
@@ -92,6 +82,10 @@ function populateModelSelector(models) {
             const option = document.createElement('option');
             option.value = id;
             option.textContent = name;
+            if (id === defaultModel) {
+                option.selected = true;
+            }
+            
             modelSelector.appendChild(option);
         }
     } else {
@@ -142,18 +136,9 @@ function setupSocketListeners() {
         const mots_arret = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"];
         const userSaidGoodbye = mots_arret.some(mot => data.lastUserMessage && data.lastUserMessage.toLowerCase().includes(mot));
         
-        if (userSaidGoodbye) {
-            console.log('Mots d\'arrêt détectés, désactivation de l\'écoute automatique');
-            
-            if (autoListenToggle) {
-                autoListenToggle.checked = false;
-                autoListen = false;
-            }
-        }
-        
         if (data.audio) {
             playAudio(data.audio);
-        } else if (autoListen && !isRecording && !userSaidGoodbye && !manualStopped) {
+        } else if (!isRecording && !userSaidGoodbye && !manualStopped) {
             startRecording();
         }
     });
@@ -166,7 +151,7 @@ function setupSocketListeners() {
         
         setStatus(data.message, true);
         
-        if (autoListen && !isRecording && !isPlayingAudio && !manualStopped) {
+        if (!isRecording && !isPlayingAudio && !manualStopped) {
             console.log('Relance automatique après erreur de compréhension');
             setTimeout(() => {
                 startRecording();
@@ -186,24 +171,17 @@ function setupSocketListeners() {
 
 function handleAudioPlaybackEnded() {
     console.log('Audio playback ended');
-    
     isPlayingAudio = false;
-    
     recordingText.textContent = 'Inactive';
-    
-    if (autoListen) {
-        console.log('REDÉMARRAGE FORCÉ après réponse audio');
-        manualStopped = false;
-        setTimeout(() => {
-            startRecording();
-        }, 500);
-    }
+    manualStopped = false;
+    setTimeout(() => {
+        startRecording();
+    }, 500);
 }
 
 function showAssistantLoading() {
     const conversation = document.getElementById('conversation');
     conversation.insertAdjacentElement('afterend', assistantLoadingIndicator);
-    
     assistantLoadingIndicator.classList.add('active');
     scrollToBottom();
 }
