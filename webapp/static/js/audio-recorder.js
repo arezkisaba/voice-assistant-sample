@@ -170,10 +170,15 @@ class AudioRecorder {
         
         uiController.setRecordingStatusText('Inactive');
         
-        config.manualStopped = false;
-        setTimeout(() => {
-            this.startRecording();
-        }, 500);
+        // Only restart recording if we haven't manually stopped or encountered a stop word
+        if (!config.manualStopped) {
+            console.log('Auto-restarting recording after audio playback');
+            setTimeout(() => {
+                this.startRecording();
+            }, 500);
+        } else {
+            console.log('Not restarting recording: manual stop or stop word detected');
+        }
     }
 
     startAudioAnalysis(dataArray) {

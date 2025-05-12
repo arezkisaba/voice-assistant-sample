@@ -26,6 +26,9 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
                             'audio': audio_base64,
                             'lastUserMessage': texte
                         })
+                    
+                        is_processing_ref[0] = False
+                        socketio.emit('listening_stopped')
                     else:
                         response = assistant.obtenir_reponse_ollama(texte)
                         audio_base64, _ = assistant.parler(response)
@@ -76,6 +79,14 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
     def handle_start_listening():
         if not is_processing_ref[0]:
             is_processing_ref[0] = True
+            
+            # Réinitialiser l'historique de conversation lorsque l'utilisateur recommence à parler
+            # après avoir dit un mot d'arrêt
+            if global_assistant.conversation_history and any(mot in ' '.join(global_assistant.conversation_history[-2:]).lower() for mot in 
+                  STOP_WORDS["fr"] + STOP_WORDS["en"]):
+                global_assistant.conversation_history = []
+                print("Historique de conversation réinitialisé après mot d'arrêt")
+            
             processing_thread_ref[0] = threading.Thread(
                 target=process_audio_queue, 
                 args=(socketio, audio_queue, is_processing_ref, global_assistant)
@@ -133,6 +144,9 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
                 'audio': audio_base64,
                 'lastUserMessage': texte
             })
+            
+            is_processing_ref[0] = False
+            emit('listening_stopped')
         else:
             response = global_assistant.obtenir_reponse_ollama(texte)
             audio_base64, _ = global_assistant.parler(response)

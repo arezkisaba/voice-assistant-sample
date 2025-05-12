@@ -41,6 +41,11 @@ class SocketManager {
                 data.lastUserMessage && data.lastUserMessage.toLowerCase().includes(mot)
             );
             
+            if (userSaidGoodbye) {
+                // Set manualStopped to true to prevent auto-restart of recording
+                config.manualStopped = true;
+            }
+            
             if (data.audio) {
                 audioRecorder.playAudio(data.audio);
             } else if (!config.isRecording && !userSaidGoodbye && !config.manualStopped) {
