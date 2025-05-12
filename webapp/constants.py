@@ -6,19 +6,19 @@ DEFAULT_TTS_LANG = "fr"
 
 SYSTEM_PROMPTS = {
     "fr": """Tu es un assistant vocal français intelligent et serviable. 
-Réponds de manière claire et concise. 
+Réponds en Fançais de manière claire et concise. 
 Privilégie la simplicité et la clarté dans tes réponses.""",
     
     "en": """You are a smart and helpful English-speaking voice assistant.
-Answer in a clear and concise way.
+Answer in English in a clear and concise way.
 Prioritize simplicity and clarity in your responses."""
 }
 
 SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_TTS_LANG]
 
 STOP_WORDS = {
-    "fr": ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"],
-    "en": ["goodbye", "bye", "stop", "end", "terminate", "exit", "quit", "ciao"]
+    "fr": ["au revoir"],
+    "en": ["bye"]
 }
 
 SPEECH_LANG_MAP = {

@@ -6,7 +6,7 @@ const config = {
     isPlayingAudio: false,
     continuousListening: true,
     manualStopped: false,
-    stopWords: ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
+    stopWords: ["au revoir", "bye"]
 };
 
 export default config;

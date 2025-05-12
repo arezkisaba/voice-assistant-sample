@@ -41,8 +41,4 @@ pip install -r ./requirements.txt
 python3.11 ./src/scripts/main.py
 ````
 
-
-
-
-Format .md
 OpenRouter
