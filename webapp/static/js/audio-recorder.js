@@ -20,6 +20,18 @@ class AudioRecorder {
         }
         
         try {
+            // Nettoyage complet des ressources précédentes
+            if (this.mediaRecorder) {
+                try {
+                    if (this.mediaRecorder.state === 'recording') {
+                        this.mediaRecorder.stop();
+                    }
+                } catch (e) {
+                    console.log("Erreur lors de l'arrêt du mediaRecorder précédent:", e);
+                }
+                this.mediaRecorder = null;
+            }
+            
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 try {
                     await this.audioContext.close();
@@ -33,6 +45,7 @@ class AudioRecorder {
             this.analyser = null;
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
             this.mediaRecorder = new MediaRecorder(stream);
             this.audioChunks = [];
             
@@ -44,15 +57,26 @@ class AudioRecorder {
             });
             
             this.mediaRecorder.addEventListener('stop', () => {
+                if (this.audioChunks.length === 0) {
+                    console.log("No audio chunks recorded");
+                    return;
+                }
+                
                 const audioBlob = new Blob(this.audioChunks);
                 this.processAudio(audioBlob);
                 
+                // Libérer immédiatement les ressources
                 stream.getTracks().forEach(track => track.stop());
+                this.audioChunks = [];
+                
                 if (this.audioContext) {
                     if (this.audioContext.state !== 'closed') {
                         this.audioContext.close().catch(e => console.log("Erreur fermeture AudioContext:", e));
                     }
+                    this.audioContext = null;
                 }
+                
+                this.mediaRecorder = null;
             });
             
             this.mediaRecorder.start(100);

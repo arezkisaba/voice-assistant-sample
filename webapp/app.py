@@ -172,12 +172,22 @@ class WebAssistant:
         return texte
     
     def obtenir_reponse_ollama(self, question):
-        context = "\n".join([f"{'Assistant' if i%2 else 'Utilisateur'}: {msg}" 
-                            for i, msg in enumerate(self.conversation_history)])
+        # Create a context that includes language information
+        context_messages = []
+        current_lang = self.tts_lang
         
-        prompt = f"{context}\nUtilisateur: {question}\nAssistant:"
+        # Add a language indicator with each message in the history
+        for i, msg in enumerate(self.conversation_history):
+            speaker = 'Assistant' if i%2 else 'Utilisateur'
+            context_messages.append(f"{speaker} [{current_lang}]: {msg}")
         
+        # Add the current question with language indicator
+        context = "\n".join(context_messages)
+        prompt = f"{context}\nUtilisateur [{current_lang}]: {question}\nAssistant [{current_lang}]:"
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
+
+        print(f"Envoi à Ollama: {prompt}")
+        print(f"Envoi system à Ollama: {system_prompt}")
         
         payload = {
             "model": MODEL_REF[0],
@@ -207,18 +217,31 @@ class WebAssistant:
         try:
             audio_bytes = base64.b64decode(audio_data.split(',')[1])
             
+            # Création d'un répertoire temporaire unique pour chaque session
+            import uuid
+            session_id = str(uuid.uuid4())
+            session_dir = os.path.join(self.temp_dir, f"audio_session_{session_id}")
+            os.makedirs(session_dir, exist_ok=True)
+            
             timestamp = int(time.time() * 1000)
-            temp_source = os.path.join(self.temp_dir, f"temp_audio_source_{timestamp}")
-            temp_wav = os.path.join(self.temp_dir, f"temp_audio_{timestamp}.wav")
+            temp_source = os.path.join(session_dir, f"temp_audio_source_{timestamp}")
+            temp_wav = os.path.join(session_dir, f"temp_audio_{timestamp}.wav")
             
             with open(temp_source, 'wb') as f:
                 f.write(audio_bytes)
             
-            conversion_command = f"ffmpeg -y -i {temp_source} -acodec pcm_s16le -ar 16000 -ac 1 {temp_wav}"
-            conversion_process = os.system(conversion_command)
+            # Utiliser subprocess pour une meilleure gestion des erreurs
+            import subprocess
+            conversion_command = ["ffmpeg", "-y", "-i", temp_source, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", temp_wav]
             
-            if conversion_process != 0:
-                print(f"❌ Error converting audio: ffmpeg returned {conversion_process}")
+            try:
+                process = subprocess.run(conversion_command, capture_output=True, text=True, check=False)
+                if process.returncode != 0:
+                    print(f"❌ Error converting audio: ffmpeg returned {process.returncode}")
+                    print(f"STDERR: {process.stderr}")
+                    return None
+            except Exception as e:
+                print(f"❌ Error executing ffmpeg: {e}")
                 return None
             
             import speech_recognition as sr
@@ -241,8 +264,9 @@ class WebAssistant:
                 return None
             finally:
                 try:
-                    os.remove(temp_source)
-                    os.remove(temp_wav)
+                    # Nettoyage complet du répertoire de session
+                    import shutil
+                    shutil.rmtree(session_dir, ignore_errors=True)
                 except Exception as cleanup_error:
                     print(f"Error during cleanup: {cleanup_error}")
                     pass
