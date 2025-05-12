@@ -224,6 +224,7 @@ header p {
     font-size: 0.9rem;
     color: #666;
     position: relative;
+    flex-wrap: nowrap;
 }
 
 .recording-indicator {
@@ -521,6 +522,42 @@ header p {
     max-width: 100%;
     height: auto;
     border-radius: 3px;
+}
+
+.audio-level-container {
+    width: 50px;
+    height: 12px;
+    background-color: #f0f0f0;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-left: 10px;
+    position: relative;
+    border: 1px solid #ddd;
+    display: none;
+}
+
+.recording-indicator.active ~ .audio-level-container {
+    display: block;
+}
+
+.audio-level-meter {
+    height: 100%;
+    width: 0%;
+    transition: width 0.1s ease-out;
+    background-color: #4CAF50;
+    border-radius: 4px;
+}
+
+.audio-level-meter.low-level {
+    background-color: #4CAF50;
+}
+
+.audio-level-meter.mid-level {
+    background-color: #FFC107;
+}
+
+.audio-level-meter.high-level {
+    background-color: #F44336;
 }
 
 @media (max-width: 600px) {

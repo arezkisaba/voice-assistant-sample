@@ -13,7 +13,8 @@ class UIController {
             audioPlayer: null,
             assistantLoadingIndicator: null,
             userLoadingIndicator: null,
-            ttsLangSelector: null
+            ttsLangSelector: null,
+            audioLevelMeter: null
         };
     }
 
@@ -31,6 +32,24 @@ class UIController {
         this.elements.assistantLoadingIndicator = document.getElementById('assistant-loading-indicator');
         this.elements.userLoadingIndicator = document.getElementById('user-loading-indicator');
         this.elements.ttsLangSelector = document.getElementById('tts-lang-selector');
+        
+        // Create audio level meter element if it doesn't exist
+        if (!document.getElementById('audio-level-meter')) {
+            const meterContainer = document.createElement('div');
+            meterContainer.id = 'audio-level-container';
+            meterContainer.className = 'audio-level-container';
+            
+            const meter = document.createElement('div');
+            meter.id = 'audio-level-meter';
+            meter.className = 'audio-level-meter';
+            
+            meterContainer.appendChild(meter);
+            
+            // Add the meter next to the recording status
+            this.elements.recordingStatus.appendChild(meterContainer);
+        }
+        
+        this.elements.audioLevelMeter = document.getElementById('audio-level-meter');
     }
 
     updateRecordingUI(isRecording) {
@@ -168,6 +187,24 @@ class UIController {
     disableTextInput(disable) {
         this.elements.sendTextBtn.disabled = disable;
         this.elements.textInput.disabled = disable;
+    }
+    
+    updateAudioLevel(level) {
+        if (!this.elements.audioLevelMeter) return;
+        
+        // Update the audio level meter height based on input level
+        this.elements.audioLevelMeter.style.width = `${level}%`;
+        
+        // Add color classes based on audio level
+        this.elements.audioLevelMeter.classList.remove('low-level', 'mid-level', 'high-level');
+        
+        if (level < 30) {
+            this.elements.audioLevelMeter.classList.add('low-level');
+        } else if (level < 70) {
+            this.elements.audioLevelMeter.classList.add('mid-level');
+        } else {
+            this.elements.audioLevelMeter.classList.add('high-level');
+        }
     }
 }
 

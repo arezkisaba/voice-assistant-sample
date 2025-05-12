@@ -10,6 +10,8 @@ class AudioRecorder {
         this.analyser = null;
         this.audioBuffer = [];
         this.audioSampleRate = 0;
+        this.silenceAudioFrameCount = 0;
+        this.hasTalked = false;
     }
 
     async startRecording() {
@@ -45,6 +47,20 @@ class AudioRecorder {
             this.analyser = null;
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Set up audio analyzer for real-time monitoring
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 256;
+            const bufferLength = this.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            // Connect stream to analyzer
+            const source = this.audioContext.createMediaStreamSource(stream);
+            source.connect(this.analyser);
+            
+            // Start analyzing audio input
+            this.startAudioAnalysis(dataArray);
             
             this.mediaRecorder = new MediaRecorder(stream);
             this.audioChunks = [];
@@ -109,6 +125,7 @@ class AudioRecorder {
             
             uiController.updateRecordingUI(false);
             socketManager.stopListening();
+            this.hasTalked = false;
         }
     }
 
@@ -157,6 +174,64 @@ class AudioRecorder {
         setTimeout(() => {
             this.startRecording();
         }, 500);
+    }
+
+    startAudioAnalysis(dataArray) {
+        // Create animation frame to continuously monitor audio levels
+        let audioMonitoringId = null;
+        
+        const analyzeAudio = () => {
+            if (!this.analyser || !config.isRecording) {
+                if (audioMonitoringId) {
+                    cancelAnimationFrame(audioMonitoringId);
+                }
+                return;
+            }
+            
+            this.analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate audio level (average of frequency data)
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            
+            // Emit audio level event for UI updates
+            this.handleAudioLevel(average);
+            
+            // Continue monitoring
+            audioMonitoringId = requestAnimationFrame(analyzeAudio);
+        };
+        
+        // Start the audio analysis loop
+        audioMonitoringId = requestAnimationFrame(analyzeAudio);
+    }
+    
+    handleAudioLevel(level) {
+        if (!config.isRecording) {
+            return;
+        }
+        
+        const normalizedLevel = Math.min(100, Math.max(0, level * 2));
+        uiController.updateAudioLevel(normalizedLevel);
+
+        if (level < 15) {
+            this.handleSilence();
+            if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
+                console.log('Silence detected, stopping recording');
+                this.silenceAudioFrameCount = 0;
+                this.stopRecording();
+            }
+        } else {
+            console.log('Talk detected');
+            this.silenceAudioFrameCount = 0;
+            this.hasTalked = true;
+        }
+    }
+    
+    handleSilence() {
+        this.silenceAudioFrameCount++;
     }
 }
 
