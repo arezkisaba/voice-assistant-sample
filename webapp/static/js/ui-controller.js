@@ -17,7 +17,6 @@ class UIController {
             audioLevelMeter: null
         };
         
-        // Variables pour gérer le streaming des réponses
         this.isStreamingResponse = false;
         this.currentStreamingMessageDiv = null;
         this.currentStreamingContentDiv = null;
@@ -39,19 +38,14 @@ class UIController {
         this.elements.userLoadingIndicator = document.getElementById('user-loading-indicator');
         this.elements.ttsLangSelector = document.getElementById('tts-lang-selector');
         
-        // Create audio level meter element if it doesn't exist
         if (!document.getElementById('audio-level-meter')) {
             const meterContainer = document.createElement('div');
             meterContainer.id = 'audio-level-container';
             meterContainer.className = 'audio-level-container';
-            
             const meter = document.createElement('div');
             meter.id = 'audio-level-meter';
             meter.className = 'audio-level-meter';
-            
             meterContainer.appendChild(meter);
-            
-            // Add the meter next to the recording status
             this.elements.recordingStatus.appendChild(meterContainer);
         }
         
@@ -101,26 +95,18 @@ class UIController {
     addMessage(sender, text) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${sender}`;
-        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        
-        // Vérifier si le texte contient du Markdown
         const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s)/.test(text);
         
         if (hasMarkdown && sender === 'assistant') {
-            // Utilisation de la bibliothèque marked pour rendre le Markdown
             contentDiv.innerHTML = marked.parse(text);
-            
-            // Ajouter une classe pour le formatage Markdown
             contentDiv.classList.add('markdown-content');
             
-            // Ajouter des styles pour les blocs de code si présents
             if (text.includes('```')) {
                 this.applyCodeHighlighting(contentDiv);
             }
         } else {
-            // Texte normal sans formatage Markdown
             const paragraph = document.createElement('p');
             paragraph.textContent = text;
             contentDiv.appendChild(paragraph);
@@ -133,7 +119,6 @@ class UIController {
     }
     
     applyCodeHighlighting(contentElement) {
-        // Parcourir tous les blocs de code et ajouter des classes CSS
         const codeBlocks = contentElement.querySelectorAll('pre code');
         codeBlocks.forEach(block => {
             block.classList.add('hljs');
@@ -159,29 +144,23 @@ class UIController {
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
-        
-        // Mettre à jour le texte et afficher l'indicateur que l'assistant parle
         this.elements.recordingText.textContent = 'Assistant parle...';
         this.elements.recordingStatus.classList.add('speaking');
         
-        // Afficher le bouton d'annulation de la synthèse vocale
         if (this.elements.cancelSpeechBtn) {
             this.elements.cancelSpeechBtn.classList.remove('hidden');
         }
         
-        // Ajouter un gestionnaire d'événement pour lorsque l'audio se termine
         this.elements.audioPlayer.onended = () => {
             this.stopSpeaking();
         };
     }
     
     stopSpeaking() {
-        // Masquer le bouton d'annulation et réinitialiser le statut
         if (this.elements.cancelSpeechBtn) {
             this.elements.cancelSpeechBtn.classList.add('hidden');
         }
         
-        // Réinitialiser l'indicateur d'état
         this.elements.recordingStatus.classList.remove('speaking');
         this.elements.recordingText.textContent = 'Inactive';
     }
@@ -196,12 +175,11 @@ class UIController {
     }
     
     updateAudioLevel(level) {
-        if (!this.elements.audioLevelMeter) return;
+        if (!this.elements.audioLevelMeter) {
+            return;
+        }
         
-        // Update the audio level meter height based on input level
         this.elements.audioLevelMeter.style.width = `${level}%`;
-        
-        // Add color classes based on audio level
         this.elements.audioLevelMeter.classList.remove('low-level', 'mid-level', 'high-level');
         
         if (level < 30) {
@@ -213,63 +191,109 @@ class UIController {
         }
     }
 
-    // Méthode pour commencer le streaming d'une réponse
     startStreamingResponse(initialText) {
         this.isStreamingResponse = true;
         this.streamedText = initialText;
-        
-        // Créer un nouveau message pour l'assistant
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
-        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        
         const paragraph = document.createElement('p');
         paragraph.textContent = initialText;
         contentDiv.appendChild(paragraph);
-        
         messageDiv.appendChild(contentDiv);
         this.elements.conversation.appendChild(messageDiv);
-        
-        // Stocker les références pour pouvoir les mettre à jour
         this.currentStreamingMessageDiv = messageDiv;
         this.currentStreamingContentDiv = contentDiv;
-        
         this.scrollToBottom();
     }
     
-    // Méthode pour ajouter du texte à la réponse en cours de streaming
     appendToStreamingResponse(textChunk) {
         if (!this.isStreamingResponse || !this.currentStreamingContentDiv) {
-            // Si pour une raison quelconque nous ne sommes pas en mode streaming, commencer un nouveau message
             this.startStreamingResponse(textChunk);
             return;
         }
         
-        // Ajouter le nouveau morceau de texte
-        this.streamedText += ' ' + textChunk;
+        // Vérifier si le nouveau chunk commence par un élément de liste numérotée ou contient du formatage
+        const isNumberedListItem = textChunk.trim().match(/^\d+\.\s/);
+        const containsFormatting = textChunk.includes('*') || textChunk.includes('_') || textChunk.includes('`');
+        
+        // Ajouter le nouveau morceau de texte en préservant les retours à la ligne et le formatage
+        if (textChunk.trim().startsWith('\n') || textChunk.trim().startsWith('\r\n')) {
+            this.streamedText += textChunk;
+        } else if (isNumberedListItem) {
+            // Si c'est un élément de liste numérotée, s'assurer qu'il commence sur une nouvelle ligne
+            if (!this.streamedText.endsWith('\n') && !this.streamedText.endsWith('\r\n') && this.streamedText.length > 0) {
+                this.streamedText += '\n' + textChunk;
+            } else {
+                this.streamedText += textChunk;
+            }
+        } else {
+            // Vérifier si le texte existant se termine par un retour à la ligne
+            const endsWithNewline = this.streamedText.endsWith('\n') || this.streamedText.endsWith('\r\n');
+            // Vérifier si textChunk contient du Markdown qui nécessite un retour à la ligne
+            const isNewParagraph = textChunk.trim().match(/^(\#{1,6}|\*|\-|\+|\d+\.)\s/);
+            
+            // Si le chunk contient un formatage spécial, être prudent avec les espaces
+            if (containsFormatting) {
+                // Préserver les délimiteurs de formatage en évitant d'ajouter des espaces qui pourraient les casser
+                const lastChar = this.streamedText.slice(-1);
+                const firstChar = textChunk.charAt(0);
+                
+                // Éviter d'ajouter un espace si cela casserait le formatage
+                // Par exemple, ne pas ajouter d'espace entre 'texte' et '**gras**'
+                if (lastChar === '*' || lastChar === '_' || lastChar === '`' || 
+                    firstChar === '*' || firstChar === '_' || firstChar === '`') {
+                    this.streamedText += textChunk;
+                } else if (endsWithNewline || isNewParagraph) {
+                    this.streamedText += textChunk;
+                } else {
+                    this.streamedText += ' ' + textChunk;
+                }
+            } else if (endsWithNewline || isNewParagraph) {
+                this.streamedText += textChunk;
+            } else {
+                this.streamedText += ' ' + textChunk;
+            }
+        }
+        
+        // Prétraiter le texte pour gérer correctement les listes et le formatage
+        let processedText = this.streamedText;
+        
+        // Remplacer les motifs de liste numérotée pour s'assurer qu'ils sont sur des lignes séparées
+        processedText = processedText.replace(/(\S)(\s*)(\d+\.\s)/g, '$1\n$3');
+        
+        // S'assurer que les balises de formatage sont correctement espacées
+        // Éviter les espaces indésirables autour des balises de mise en forme
+        processedText = processedText.replace(/\s+\*\*/g, ' **').replace(/\*\*\s+/g, '** ');
+        processedText = processedText.replace(/\s+\*/g, ' *').replace(/\*\s+/g, '* ');
+        processedText = processedText.replace(/\s+__/g, ' __').replace(/__\s+/g, '__ ');
+        processedText = processedText.replace(/\s+_/g, ' _').replace(/_\s+/g, '_ ');
+        processedText = processedText.replace(/\s+`/g, ' `').replace(/`\s+/g, '` ');
         
         // Vérifier si le texte contient du Markdown
-        const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s)/.test(this.streamedText);
+        const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s|\d+\.\s|\*[^*]+\*|_[^_]+_)/.test(processedText);
         
         if (hasMarkdown) {
-            // Utiliser Markdown pour le formatage
-            this.currentStreamingContentDiv.innerHTML = marked.parse(this.streamedText);
+            // Utiliser Markdown pour le formatage avec les options pour préserver les retours à la ligne
+            this.currentStreamingContentDiv.innerHTML = marked.parse(processedText, { 
+                breaks: true,  // Convertir les retours à la ligne simples en <br>
+                gfm: true      // Utiliser GitHub Flavored Markdown
+            });
             this.currentStreamingContentDiv.classList.add('markdown-content');
             
             // Ajouter la coloration syntaxique pour les blocs de code
-            if (this.streamedText.includes('```')) {
+            if (processedText.includes('```')) {
                 this.applyCodeHighlighting(this.currentStreamingContentDiv);
             }
         } else {
             // Texte simple
             const paragraph = this.currentStreamingContentDiv.querySelector('p');
             if (paragraph) {
-                paragraph.textContent = this.streamedText;
+                paragraph.textContent = processedText;
             } else {
                 const newParagraph = document.createElement('p');
-                newParagraph.textContent = this.streamedText;
+                newParagraph.textContent = processedText;
                 this.currentStreamingContentDiv.appendChild(newParagraph);
             }
         }
@@ -277,15 +301,11 @@ class UIController {
         this.scrollToBottom();
     }
     
-    // Méthode pour finaliser la réponse en streaming
     completeStreamingResponse() {
-        // Réinitialiser les variables de streaming
         this.isStreamingResponse = false;
         this.currentStreamingMessageDiv = null;
         this.currentStreamingContentDiv = null;
         this.streamedText = '';
-        
-        // S'assurer que le défilement est à jour
         this.scrollToBottom();
     }
 }

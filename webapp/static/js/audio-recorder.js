@@ -12,12 +12,8 @@ class AudioRecorder {
         this.audioSampleRate = 0;
         this.silenceAudioFrameCount = 0;
         this.hasTalked = false;
-        
-        // File d'attente pour les audios de phrases
         this.audioQueue = [];
         this.isPlayingQueuedAudio = false;
-        
-        // Variable pour bloquer explicitement la reprise de l'enregistrement
         this.blockRecordingUntilFullResponse = false;
     }
 
@@ -29,7 +25,6 @@ class AudioRecorder {
         }
         
         try {
-            // Nettoyage complet des ressources précédentes
             if (this.mediaRecorder) {
                 try {
                     if (this.mediaRecorder.state === 'recording') {
@@ -52,26 +47,17 @@ class AudioRecorder {
             config.isRecording = false;
             this.audioContext = null;
             this.analyser = null;
-            
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Set up audio analyzer for real-time monitoring
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
             const bufferLength = this.analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            
-            // Connect stream to analyzer
             const source = this.audioContext.createMediaStreamSource(stream);
             source.connect(this.analyser);
-            
-            // Start analyzing audio input
             this.startAudioAnalysis(dataArray);
-            
             this.mediaRecorder = new MediaRecorder(stream);
             this.audioChunks = [];
-            
             config.isRecording = true;
             console.log("Recording started, isRecording set to:", config.isRecording);
             
@@ -87,8 +73,6 @@ class AudioRecorder {
                 
                 const audioBlob = new Blob(this.audioChunks);
                 this.processAudio(audioBlob);
-                
-                // Libérer immédiatement les ressources
                 stream.getTracks().forEach(track => track.stop());
                 this.audioChunks = [];
                 
@@ -160,69 +144,49 @@ class AudioRecorder {
     queueAudioForPlayback(base64Audio) {
         this.audioQueue.push(base64Audio);
         console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
-        
-        // Si aucun audio n'est en cours de lecture, commencer la lecture
         if (!this.isPlayingQueuedAudio) {
             this.playNextQueuedAudio();
         }
     }
     
     playNextQueuedAudio() {
-        // Si la file d'attente est vide
         if (this.audioQueue.length === 0) {
             this.isPlayingQueuedAudio = false;
             console.log('File d\'attente audio vide - réponse complète terminée');
-            
-            // NE JAMAIS redémarrer l'enregistrement ici
-            // Le redémarrage ne se fera que dans l'événement response_complete
             return;
         }
         
-        // Arrêter l'enregistrement si actif
         if (config.isRecording) {
             this.stopRecording();
         }
         
-        // Paramètres pour la lecture audio
         config.isPlayingAudio = true;
         this.isPlayingQueuedAudio = true;
-        
         const base64Audio = this.audioQueue.shift();
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
-        
-        // Utiliser le lecteur audio existant
         const audioPlayer = document.getElementById('audio-player');
         audioPlayer.src = audioSrc;
-        
-        // Mettre à jour l'interface pour indiquer que l'assistant parle
         uiController.setRecordingStatusText('Assistant parle...');
         document.getElementById('recording-status').classList.add('speaking');
-        
-        // Afficher le bouton d'annulation de la synthèse vocale
         const cancelSpeechBtn = document.getElementById('cancel-speech');
         if (cancelSpeechBtn) {
             cancelSpeechBtn.classList.remove('hidden');
         }
         
-        // Configurer l'événement de fin pour jouer le prochain audio
         audioPlayer.onended = () => {
             console.log('Fin de lecture audio, passage au suivant');
-            
-            // Si le bouton d'annulation est visible, le cacher entre deux phrases
             if (cancelSpeechBtn && this.audioQueue.length > 0) {
                 cancelSpeechBtn.classList.add('hidden');
             }
-            
-            // Ajouter un court délai entre les phrases pour un effet plus naturel
+
             setTimeout(() => {
                 this.playNextQueuedAudio();
             }, 300);
         };
         
-        // Commencer la lecture
         audioPlayer.play().catch(error => {
             console.error('Erreur lors de la lecture audio:', error);
-            this.playNextQueuedAudio(); // Passer au suivant en cas d'erreur
+            this.playNextQueuedAudio();
         });
     }
     
@@ -232,9 +196,7 @@ class AudioRecorder {
     }
 
     playAudio(base64Audio) {
-        // Vider la file d'attente existante pour éviter les conflits
         this.clearAudioQueue();
-        
         const wasManualStopped = config.manualStopped;
         
         if (config.isRecording) {
@@ -244,7 +206,6 @@ class AudioRecorder {
         
         config.manualStopped = wasManualStopped;
         config.isPlayingAudio = true;
-        
         uiController.playAudioInUI(base64Audio);
     }
 
@@ -256,9 +217,7 @@ class AudioRecorder {
     }
 
     startAudioAnalysis(dataArray) {
-        // Create animation frame to continuously monitor audio levels
         let audioMonitoringId = null;
-        
         const analyzeAudio = () => {
             if (!this.analyser || !config.isRecording) {
                 if (audioMonitoringId) {
@@ -269,21 +228,15 @@ class AudioRecorder {
             
             this.analyser.getByteFrequencyData(dataArray);
             
-            // Calculate audio level (average of frequency data)
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 sum += dataArray[i];
             }
             const average = sum / dataArray.length;
-            
-            // Emit audio level event for UI updates
             this.handleAudioLevel(average);
-            
-            // Continue monitoring
             audioMonitoringId = requestAnimationFrame(analyzeAudio);
         };
         
-        // Start the audio analysis loop
         audioMonitoringId = requestAnimationFrame(analyzeAudio);
     }
     

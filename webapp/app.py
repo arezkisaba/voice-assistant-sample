@@ -5,9 +5,6 @@ import re
 import tempfile
 import base64
 import queue
-import markdown
-import html
-import json
 from flask import Flask
 from flask_socketio import SocketIO
 from gtts import gTTS

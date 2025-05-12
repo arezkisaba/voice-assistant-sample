@@ -32,32 +32,24 @@ class SocketManager {
             uiController.showAssistantLoading();
         });
         
-        // Nouvel événement pour recevoir des morceaux de réponse (streaming)
         this.socket.on('response_chunk', (data) => {
-            // Bloquer explicitement l'enregistrement dès qu'une réponse commence
             audioRecorder.blockRecordingUntilFullResponse = true;
             
             if (!uiController.isStreamingResponse) {
-                // Première partie de la réponse
                 uiController.hideAssistantLoading();
                 uiController.disableTextInput(false);
                 uiController.startStreamingResponse(data.text);
             } else {
-                // Continuation du streaming
                 uiController.appendToStreamingResponse(data.text);
             }
             
-            // Jouer l'audio de la phrase si disponible
             if (data.audio) {
                 audioRecorder.queueAudioForPlayback(data.audio);
             }
         });
         
-        // Nouvel événement pour la complétion du streaming
         this.socket.on('response_complete', (data) => {
-            // Finaliser l'affichage de la réponse
             uiController.completeStreamingResponse();
-            
             const userSaidGoodbye = config.stopWords.some(mot => 
                 data.lastUserMessage && data.lastUserMessage.toLowerCase().includes(mot)
             );
@@ -66,7 +58,6 @@ class SocketManager {
                 config.manualStopped = true;
             }
             
-            // Fonction pour vérifier l'état de la file d'attente audio et redémarrer l'enregistrement
             const checkAudioQueueAndRestart = () => {
                 console.log("Vérification de l'état de la file d'attente audio:", 
                     audioRecorder.audioQueue.length, 
@@ -75,7 +66,6 @@ class SocketManager {
                 if (audioRecorder.audioQueue.length === 0 && !audioRecorder.isPlayingQueuedAudio) {
                     console.log("Tous les audios ont été joués, redémarrage de l'enregistrement");
                     
-                    // SEUL ENDROIT où l'enregistrement est redémarré après une réponse
                     if (!config.isRecording && !config.manualStopped && !config.isPlayingAudio) {
                         console.log("Redémarrage de l'enregistrement maintenant");
                         setTimeout(() => {
@@ -83,16 +73,13 @@ class SocketManager {
                         }, 500);
                     }
                 } else {
-                    // Continuer à vérifier tant que la file d'attente n'est pas vide
                     setTimeout(checkAudioQueueAndRestart, 500);
                 }
             };
             
-            // Lancer la vérification et le redémarrage
             setTimeout(checkAudioQueueAndRestart, 500);
         });
         
-        // Garder l'événement response pour la compatibilité et les messages d'erreur
         this.socket.on('response', (data) => {
             uiController.hideAssistantLoading();
             uiController.disableTextInput(false);
