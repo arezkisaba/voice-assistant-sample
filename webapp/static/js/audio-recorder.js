@@ -224,8 +224,13 @@ class AudioRecorder {
         if (level < 15) {
             this.handleSilence();
             if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
-                console.log('Silence detected, stopping recording');
+                console.log('Sentence end detected, stopping recording');
                 this.silenceAudioFrameCount = 0;
+                this.stopRecording();
+            } else if (this.silenceAudioFrameCount > 1000 && !this.hasTalked) {
+                console.log('Inactivity detected, stopping recording');
+                this.silenceAudioFrameCount = 0;
+                config.manualStopped = true;
                 this.stopRecording();
             }
         } else {
