@@ -16,7 +16,7 @@ import speech_recognition as sr
 from gtts import gTTS
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gemma3:12b"
+MODEL_NAME = "llama3.1:8b"
 SYSTEM_PROMPT = """Tu es un assistant vocal français intelligent et serviable. 
 Réponds de manière claire et concise, idéalement en 2-3 phrases. 
 Privilégie la simplicité et la clarté dans tes réponses."""
@@ -237,11 +237,11 @@ def verifier_ollama():
         return False, f"Erreur lors de la vérification d'Ollama: {e}"
 
 def main():
-    parser = argparse.ArgumentParser(description="Assistant Vocal Français avec Ollama et Gemma 3:12B")
+    parser = argparse.ArgumentParser(description="Assistant Vocal Français avec Ollama")
     parser.add_argument("--texte", action="store_true", help="Mode texte uniquement (sans voix)")
     args = parser.parse_args()
     
-    print("🤖 Assistant Vocal Français avec Ollama et Gemma 3:12B")
+    print("🤖 Assistant Vocal Français avec Ollama")
     print("------------------------------------------------")
     
     ollama_ok, message = verifier_ollama()

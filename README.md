@@ -1,11 +1,11 @@
 # Voice Assistant Sample
 
-A French voice assistant powered by Python, Ollama, and Gemma 3:12B. Supports voice commands in French/English with smart audio detection and noise suppression.
+A French voice assistant powered by Python, Ollama. Supports voice commands in French/English with smart audio detection and noise suppression.
 
 ## Features
 
 - Listen to your voice commands in French and English
-- Process your requests through the Gemma 3:12B model
+- Process your requests through the selected model
 - Respond verbally in French with clear and concise answers
 - Exit when hearing commands like "au revoir", "stop", "bye", etc.
 
@@ -40,3 +40,9 @@ pip install -r ./requirements.txt
 ```bash
 python3.11 ./src/scripts/main.py
 ````
+
+
+
+
+Format .md
+OpenRouter

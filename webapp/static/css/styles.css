@@ -1,4 +1,3 @@
-/* Main Styles for Voice Assistant Web App */
 :root {
     --primary-color: #3a7bd5;
     --secondary-color: #00d2ff;
@@ -210,7 +209,6 @@ header p {
     color: #666;
 }
 
-/* Styles for auto-listen toggle */
 .auto-listen-container {
     display: flex;
     align-items: center;
@@ -255,9 +253,8 @@ header p {
     cursor: pointer;
 }
 
-/* Styles pour les indicateurs de chargement */
 .loading-indicator {
-    display: none; /* Caché par défaut */
+    display: none;
     margin: 10px 0;
     padding: 0;
     width: auto;
@@ -267,12 +264,10 @@ header p {
     display: block;
 }
 
-/* Positionnement du loader de l'assistant (à gauche) */
 .assistant-loading {
     align-self: flex-start;
 }
 
-/* Positionnement du loader de l'utilisateur (à droite) */
 .user-loading {
     right: 20px;
     z-index: 100;
@@ -289,16 +284,14 @@ header p {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* Style spécifique au loader de l'assistant */
 .assistant-loading .typing-indicator {
     background-color: var(--assistant-bg);
-    border-bottom-left-radius: 2px; /* Même style que les bulles de l'assistant */
+    border-bottom-left-radius: 2px;
 }
 
-/* Style spécifique au loader de l'utilisateur */
 .user-loading .typing-indicator {
     background-color: var(--user-bg);
-    border-bottom-right-radius: 2px; /* Même style que les bulles de l'utilisateur */
+    border-bottom-right-radius: 2px;
 }
 
 .typing-indicator span {
@@ -330,7 +323,6 @@ header p {
     100% { opacity: 0.4; transform: scale(1); }
 }
 
-/* Styles pour le sélecteur de modèle */
 .model-selector-container,
 .tts-lang-selector-container {
     display: flex;
@@ -356,7 +348,6 @@ header p {
     outline: none;
 }
 
-/* Responsive design */
 @media (max-width: 600px) {
     .container {
         height: calc(100vh - 20px);

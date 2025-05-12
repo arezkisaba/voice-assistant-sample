@@ -1,86 +1,37 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
-import json
 import requests
 import time
 import argparse
 import re
 import tempfile
-import numpy as np
-from io import BytesIO
 import base64
-import sys
-from contextlib import contextmanager
 import threading
 import queue
-
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
-
 from gtts import gTTS
+from constants import *
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
-
-# Modèle par défaut au cas où la récupération échoue
-DEFAULT_MODEL = "gemma3:12b"
-
-# Variable globale pour stocker les modèles disponibles
 AVAILABLE_MODELS = {}
-
-# Langue par défaut pour le TTS
-DEFAULT_TTS_LANG = "fr"
-
-# Prompts système selon la langue
-SYSTEM_PROMPTS = {
-    "fr": """Tu es un assistant vocal français intelligent et serviable. 
-Réponds de manière claire et concise, idéalement en 2-3 phrases. 
-Privilégie la simplicité et la clarté dans tes réponses.""",
-    
-    "en": """You are a smart and helpful English-speaking voice assistant.
-Answer in a clear and concise way, ideally in 2-3 sentences.
-Prioritize simplicity and clarity in your responses."""
-}
-
-# Prompt système par défaut
-SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_TTS_LANG]
 
 app = Flask(__name__, 
             static_folder='static',
             template_folder='templates')
-app.config['SECRET_KEY'] = 'voiceassistantsecret'
+app.config['SECRET_KEY'] = FLASK_SECRET_KEY
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 audio_queue = queue.Queue()
 processing_thread = None
 is_processing = False
 
-# Créer une instance partagée de WebAssistant
 global_assistant = None
-
-@contextmanager
-def suppress_stderr():
-    stderr = sys.stderr
-    devnull = open(os.devnull, 'w')
-    sys.stderr = devnull
-    try:
-        yield
-    finally:
-        sys.stderr = stderr
-        devnull.close()
 
 class WebAssistant:
     def __init__(self):
         self.temp_dir = tempfile.gettempdir()
         self.conversation_history = []
-        self.tts_lang = DEFAULT_TTS_LANG  # Utiliser la langue par défaut
-        # Mapping pour les codes de langue de reconnaissance vocale
-        self.speech_lang_map = {
-            "fr": "fr-FR",
-            "en": "en-US"
-        }
+        self.tts_lang = DEFAULT_TTS_LANG
+        self.speech_lang_map = SPEECH_LANG_MAP
 
     def parler(self, texte):
         texte = self._nettoyer_texte(texte)
@@ -93,19 +44,15 @@ class WebAssistant:
             temp_file_fast = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}_fast.mp3")
             tts.save(temp_file)
             
-            # Accélérer l'audio avec ffmpeg (similaire à main.py)
-            speed_factor = 1.5  # Augmenté de 1.3 à 1.5 pour une lecture plus rapide
-            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={speed_factor}\" -vn {temp_file_fast}"
+            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast}"
             os.system(cmd)
             
-            # Utiliser le fichier accéléré s'il existe, sinon utiliser le fichier original
             audio_file = temp_file_fast if os.path.exists(temp_file_fast) else temp_file
             
             with open(audio_file, 'rb') as f:
                 audio_data = f.read()
                 audio_base64 = base64.b64encode(audio_data).decode('utf-8')
             
-            # Nettoyer les fichiers temporaires
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
@@ -131,7 +78,6 @@ class WebAssistant:
         
         prompt = f"{context}\nUtilisateur: {question}\nAssistant:"
         
-        # Utiliser le prompt système correspondant à la langue sélectionnée
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
         
         payload = {
@@ -139,10 +85,7 @@ class WebAssistant:
             "prompt": prompt,
             "system": system_prompt,
             "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
+            "options": OLLAMA_OPTIONS
         }
         
         try:
@@ -156,27 +99,22 @@ class WebAssistant:
                 return response_text
             else:
                 print(f"❌ Erreur Ollama: {response.status_code}")
-                return "Désolé, j'ai rencontré une erreur de communication avec le modèle." if self.tts_lang == "fr" else "Sorry, I encountered an error communicating with the model."
+                return ERROR_MESSAGES[self.tts_lang]["model_communication"]
         except Exception as e:
             print(f"❌ Exception lors de l'appel à Ollama: {e}")
-            return "Désolé, je ne peux pas accéder au modèle pour le moment." if self.tts_lang == "fr" else "Sorry, I cannot access the model at the moment."
+            return ERROR_MESSAGES[self.tts_lang]["model_access"]
 
     def analyser_audio(self, audio_data):
         try:
-            # Decode base64 audio data
             audio_bytes = base64.b64decode(audio_data.split(',')[1])
             
-            # Create temp files for the audio
-            # Use unique identifiers based on timestamp to avoid conflicts
             timestamp = int(time.time() * 1000)
             temp_source = os.path.join(self.temp_dir, f"temp_audio_source_{timestamp}")
             temp_wav = os.path.join(self.temp_dir, f"temp_audio_{timestamp}.wav")
             
-            # Save the raw audio data to a temporary file
             with open(temp_source, 'wb') as f:
                 f.write(audio_bytes)
             
-            # Convert to WAV format using ffmpeg
             conversion_command = f"ffmpeg -y -i {temp_source} -acodec pcm_s16le -ar 16000 -ac 1 {temp_wav}"
             conversion_process = os.system(conversion_command)
             
@@ -184,18 +122,15 @@ class WebAssistant:
                 print(f"❌ Error converting audio: ffmpeg returned {conversion_process}")
                 return None
             
-            # Use Google's speech recognition
             import speech_recognition as sr
             recognizer = sr.Recognizer()
             
             with sr.AudioFile(temp_wav) as source:
                 audio = recognizer.record(source)
                 
-            # Obtenir le code de langue approprié pour la reconnaissance vocale (fr-FR, en-US, etc.)
             speech_lang = self.speech_lang_map.get(self.tts_lang, "fr-FR")
             print(f"Reconnaissance vocale avec la langue: {speech_lang}")
                 
-            # Try to recognize
             try:
                 texte = recognizer.recognize_google(audio, language=speech_lang)
                 return texte
@@ -206,7 +141,6 @@ class WebAssistant:
                 print(f"Google Speech API error: {e}")
                 return None
             finally:
-                # Clean up
                 try:
                     os.remove(temp_source)
                     os.remove(temp_wav)
@@ -229,7 +163,7 @@ def verifier_ollama():
         AVAILABLE_MODELS = {}
         for model in models:
             model_name = model.get("name")
-            if ':' in model_name:  # If model name already includes a tag
+            if ':' in model_name:
                 AVAILABLE_MODELS[model_name] = model_name
             else:
                 model_tag = model.get("tag")
@@ -251,41 +185,32 @@ def process_audio_queue():
         try:
             audio_data = audio_queue.get(timeout=1)
             if audio_data:
-                # Analyze audio
                 texte = assistant.analyser_audio(audio_data)
                 
                 if texte:
                     socketio.emit('transcript', {'text': texte})
                     
-                    # Mots d'arrêt dans les deux langues
-                    mots_arret_fr = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
-                    mots_arret_en = ["goodbye", "bye", "stop", "end", "terminate", "exit", "quit", "ciao"]
-                    
-                    # Vérifier la langue et utiliser les mots d'arrêt correspondants
-                    mots_arret = mots_arret_fr if assistant.tts_lang == "fr" else mots_arret_en
+                    mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
                     is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
                     
                     if is_exit_phrase:
-                        # Message d'au revoir adapté à la langue
-                        response = "Au revoir! À bientôt." if assistant.tts_lang == "fr" else "Goodbye! See you soon."
+                        response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
                         audio_base64, _ = assistant.parler(response)
                         socketio.emit('response', {
                             'text': response,
                             'audio': audio_base64,
-                            'lastUserMessage': texte  # Inclure le message de l'utilisateur
+                            'lastUserMessage': texte
                         })
                     else:
-                        # Get response from Ollama
                         response = assistant.obtenir_reponse_ollama(texte)
                         audio_base64, _ = assistant.parler(response)
                         socketio.emit('response', {
                             'text': response,
                             'audio': audio_base64,
-                            'lastUserMessage': texte  # Inclure le message de l'utilisateur
+                            'lastUserMessage': texte
                         })
                 else:
-                    # Message d'erreur adapté à la langue
-                    error_msg = "Je n'ai pas compris ce que vous avez dit" if assistant.tts_lang == "fr" else "I didn't understand what you said"
+                    error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
                     socketio.emit('error', {'message': error_msg})
             
             audio_queue.task_done()
@@ -302,7 +227,6 @@ def get_models():
 
 @app.route('/service-worker.js')
 def serve_service_worker():
-    # Servir le service worker depuis la racine, ce qui est essentiel pour les PWA
     return app.send_static_file('js/service-worker.js')
 
 @app.route('/')
@@ -356,18 +280,14 @@ def handle_tts_lang_change(data):
     assistant = global_assistant
     lang = data.get('lang')
     
-    # Vérifier que la langue est prise en charge (fr ou en)
     if lang in ['fr', 'en']:
-        # Ne pas réinitialiser l'historique de conversation lors du changement de langue
-        # pour conserver le contexte de la conversation
         assistant.tts_lang = lang
         
-        # Messages de statut adaptés à la langue
-        status_message = 'Langue changée pour le français' if lang == 'fr' else 'Language changed to English'
+        status_message = RESPONSE_MESSAGES[lang]["language_changed"]
         print(f"Langue changée pour {lang}")
         emit('status', {'message': status_message})
     else:
-        error_message = 'Langue non prise en charge' if assistant.tts_lang == 'fr' else 'Language not supported'
+        error_message = ERROR_MESSAGES[assistant.tts_lang]["language_not_supported"]
         emit('error', {'message': f'{error_message}: {lang}'})
 
 @socketio.on('text_input')
@@ -375,31 +295,24 @@ def handle_text_input(data):
     assistant = global_assistant
     texte = data['text']
     
-    # Mots d'arrêt dans les deux langues
-    mots_arret_fr = ["au revoir", "arrête", "stop", "termine", "bye", "goodbye", "exit", "quit", "ciao"]
-    mots_arret_en = ["goodbye", "bye", "stop", "end", "terminate", "exit", "quit", "ciao"]
-    
-    # Vérifier la langue et utiliser les mots d'arrêt correspondants
-    mots_arret = mots_arret_fr if assistant.tts_lang == "fr" else mots_arret_en
+    mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
     is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
     
     if is_exit_phrase:
-        # Message d'au revoir adapté à la langue
-        response = "Au revoir! À bientôt." if assistant.tts_lang == "fr" else "Goodbye! See you soon."
+        response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
         audio_base64, _ = assistant.parler(response)
         emit('response', {
             'text': response,
             'audio': audio_base64,
-            'lastUserMessage': texte  # Inclure le dernier message de l'utilisateur
+            'lastUserMessage': texte
         })
     else:
-        # Get response from Ollama
         response = assistant.obtenir_reponse_ollama(texte)
         audio_base64, _ = assistant.parler(response)
         emit('response', {
             'text': response,
             'audio': audio_base64,
-            'lastUserMessage': texte  # Inclure le dernier message de l'utilisateur
+            'lastUserMessage': texte
         })
 
 if __name__ == '__main__':
@@ -410,13 +323,11 @@ if __name__ == '__main__':
     else:
         print(f"✅ Ollama est prêt avec le modèle {DEFAULT_MODEL}")
         
-        # Parse command line arguments
         parser = argparse.ArgumentParser(description='Voice Assistant Web App')
         parser.add_argument('--ssl', action='store_true', help='Enable HTTPS with self-signed certificate')
         args = parser.parse_args()
         
         if args.ssl:
-            # Generate self-signed certificate if it doesn't exist
             cert_path = 'cert.pem'
             key_path = 'key.pem'
             
