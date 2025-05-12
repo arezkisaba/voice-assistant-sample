@@ -12,6 +12,13 @@ class AudioRecorder {
         this.audioSampleRate = 0;
         this.silenceAudioFrameCount = 0;
         this.hasTalked = false;
+        
+        // File d'attente pour les audios de phrases
+        this.audioQueue = [];
+        this.isPlayingQueuedAudio = false;
+        
+        // Variable pour bloquer explicitement la reprise de l'enregistrement
+        this.blockRecordingUntilFullResponse = false;
     }
 
     async startRecording() {
@@ -150,7 +157,84 @@ class AudioRecorder {
         }
     }
 
+    queueAudioForPlayback(base64Audio) {
+        this.audioQueue.push(base64Audio);
+        console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
+        
+        // Si aucun audio n'est en cours de lecture, commencer la lecture
+        if (!this.isPlayingQueuedAudio) {
+            this.playNextQueuedAudio();
+        }
+    }
+    
+    playNextQueuedAudio() {
+        // Si la file d'attente est vide
+        if (this.audioQueue.length === 0) {
+            this.isPlayingQueuedAudio = false;
+            console.log('File d\'attente audio vide - réponse complète terminée');
+            
+            // NE JAMAIS redémarrer l'enregistrement ici
+            // Le redémarrage ne se fera que dans l'événement response_complete
+            return;
+        }
+        
+        // Arrêter l'enregistrement si actif
+        if (config.isRecording) {
+            this.stopRecording();
+        }
+        
+        // Paramètres pour la lecture audio
+        config.isPlayingAudio = true;
+        this.isPlayingQueuedAudio = true;
+        
+        const base64Audio = this.audioQueue.shift();
+        const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
+        
+        // Utiliser le lecteur audio existant
+        const audioPlayer = document.getElementById('audio-player');
+        audioPlayer.src = audioSrc;
+        
+        // Mettre à jour l'interface pour indiquer que l'assistant parle
+        uiController.setRecordingStatusText('Assistant parle...');
+        document.getElementById('recording-status').classList.add('speaking');
+        
+        // Afficher le bouton d'annulation de la synthèse vocale
+        const cancelSpeechBtn = document.getElementById('cancel-speech');
+        if (cancelSpeechBtn) {
+            cancelSpeechBtn.classList.remove('hidden');
+        }
+        
+        // Configurer l'événement de fin pour jouer le prochain audio
+        audioPlayer.onended = () => {
+            console.log('Fin de lecture audio, passage au suivant');
+            
+            // Si le bouton d'annulation est visible, le cacher entre deux phrases
+            if (cancelSpeechBtn && this.audioQueue.length > 0) {
+                cancelSpeechBtn.classList.add('hidden');
+            }
+            
+            // Ajouter un court délai entre les phrases pour un effet plus naturel
+            setTimeout(() => {
+                this.playNextQueuedAudio();
+            }, 300);
+        };
+        
+        // Commencer la lecture
+        audioPlayer.play().catch(error => {
+            console.error('Erreur lors de la lecture audio:', error);
+            this.playNextQueuedAudio(); // Passer au suivant en cas d'erreur
+        });
+    }
+    
+    clearAudioQueue() {
+        this.audioQueue = [];
+        this.isPlayingQueuedAudio = false;
+    }
+
     playAudio(base64Audio) {
+        // Vider la file d'attente existante pour éviter les conflits
+        this.clearAudioQueue();
+        
         const wasManualStopped = config.manualStopped;
         
         if (config.isRecording) {
@@ -167,18 +251,8 @@ class AudioRecorder {
     handleAudioPlaybackEnded() {
         console.log('Audio playback ended');
         config.isPlayingAudio = false;
-        
+        this.isPlayingQueuedAudio = false;
         uiController.setRecordingStatusText('Inactive');
-        
-        // Only restart recording if we haven't manually stopped or encountered a stop word
-        if (!config.manualStopped) {
-            console.log('Auto-restarting recording after audio playback');
-            setTimeout(() => {
-                this.startRecording();
-            }, 500);
-        } else {
-            console.log('Not restarting recording: manual stop or stop word detected');
-        }
     }
 
     startAudioAnalysis(dataArray) {

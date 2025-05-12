@@ -2,6 +2,7 @@ from flask import jsonify, render_template
 from flask_socketio import emit
 import threading
 import queue
+import json
 
 from constants import *
 
@@ -24,19 +25,17 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
                         socketio.emit('response', {
                             'text': response,
                             'audio': audio_base64,
-                            'lastUserMessage': texte
+                            'lastUserMessage': texte,
+                            'isComplete': True
                         })
                     
                         is_processing_ref[0] = False
                         socketio.emit('listening_stopped')
                     else:
-                        response = assistant.obtenir_reponse_ollama(texte)
-                        audio_base64, _ = assistant.parler(response)
-                        socketio.emit('response', {
-                            'text': response,
-                            'audio': audio_base64,
-                            'lastUserMessage': texte
-                        })
+                        # Utiliser le streaming pour renvoyer la réponse phrase par phrase
+                        assistant.obtenir_reponse_ollama_stream(texte, socketio)
+                        
+                        # La réponse complète est maintenant gérée par le streaming
                 else:
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
                     socketio.emit('error', {'message': error_msg})
@@ -142,19 +141,17 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
             emit('response', {
                 'text': response,
                 'audio': audio_base64,
-                'lastUserMessage': texte
+                'lastUserMessage': texte,
+                'isComplete': True
             })
             
             is_processing_ref[0] = False
             emit('listening_stopped')
         else:
-            response = global_assistant.obtenir_reponse_ollama(texte)
-            audio_base64, _ = global_assistant.parler(response)
-            emit('response', {
-                'text': response,
-                'audio': audio_base64,
-                'lastUserMessage': texte
-            })
+            # Utiliser le streaming pour renvoyer la réponse phrase par phrase
+            global_assistant.obtenir_reponse_ollama_stream(texte, socketio)
+            
+            # La réponse complète est maintenant gérée par le streaming
             
     @socketio.on('cancel_speech')
     def handle_cancel_speech():

@@ -7,6 +7,7 @@ import base64
 import queue
 import markdown
 import html
+import json
 from flask import Flask
 from flask_socketio import SocketIO
 from gtts import gTTS
@@ -98,7 +99,7 @@ class WebAssistant:
         text = re.sub(r'`([^`]+)`', r'\1', text)
         
         # Supprimer les balises HTML
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'<[^>]+>', '', markdown_text)
         
         # Convertir les liens [texte](url) en texte uniquement
         text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
@@ -212,6 +213,135 @@ class WebAssistant:
         except Exception as e:
             print(f"❌ Exception lors de l'appel à Ollama: {e}")
             return ERROR_MESSAGES[self.tts_lang]["model_access"]
+
+    def obtenir_reponse_ollama_stream(self, question, socketio):
+        """Version streaming de l'obtention de réponse qui envoie les résultats phrase par phrase"""
+        import re
+        import requests
+        import json
+        
+        # Créer le contexte incluant l'historique de conversation
+        context_messages = []
+        current_lang = self.tts_lang
+        
+        # Ajouter les messages précédents avec l'indicateur de langue
+        for i, msg in enumerate(self.conversation_history):
+            speaker = 'Assistant' if i%2 else 'Utilisateur'
+            context_messages.append(f"{speaker} [{current_lang}]: {msg}")
+        
+        # Ajouter la question actuelle avec l'indicateur de langue
+        context = "\n".join(context_messages)
+        prompt = f"{context}\nUtilisateur [{current_lang}]: {question}\nAssistant [{current_lang}]:"
+        system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
+
+        print(f"Streaming depuis Ollama avec la requête: {prompt}")
+        
+        payload = {
+            "model": MODEL_REF[0],
+            "prompt": prompt,
+            "system": system_prompt,
+            "stream": True,
+            "options": OLLAMA_OPTIONS
+        }
+        
+        try:
+            response_stream = requests.post(OLLAMA_URL, json=payload, stream=True)
+            
+            if response_stream.status_code != 200:
+                print(f"❌ Erreur Ollama: {response_stream.status_code}")
+                error_msg = ERROR_MESSAGES[self.tts_lang]["model_communication"]
+                socketio.emit('response', {'text': error_msg, 'isComplete': True})
+                return
+            
+            # Variables pour reconstituer la réponse
+            full_response = ""
+            buffer = ""
+            current_sentences = []
+            
+            # Pattern pour détecter les phrases complètes
+            # Une phrase se termine par un point, un point d'exclamation ou un point d'interrogation
+            # suivi d'un espace ou de la fin de la chaîne
+            sentence_pattern = r'[.!?](?:\s|$)'
+            
+            for line in response_stream.iter_lines():
+                if line:
+                    # Extraire le texte du JSON
+                    try:
+                        chunk_data = json.loads(line)
+                        if 'response' in chunk_data:
+                            chunk_text = chunk_data['response']
+                            buffer += chunk_text
+                            full_response += chunk_text
+                            
+                            # Vérifier si nous avons des phrases complètes
+                            sentences = re.split(sentence_pattern, buffer)
+                            if len(sentences) > 1:  # Si nous avons au moins une phrase complète
+                                # Reconstituer les phrases avec leurs terminaisons
+                                complete_sentences = []
+                                for i in range(len(sentences) - 1):  # Exclure la dernière qui peut être incomplète
+                                    # Trouver la ponctuation qui a terminé cette phrase
+                                    end_pos = buffer.find(sentences[i]) + len(sentences[i])
+                                    if end_pos < len(buffer):
+                                        end_char = buffer[end_pos]
+                                        current_sentence = sentences[i] + end_char
+                                        complete_sentences.append(current_sentence)
+                                        current_sentences.append(current_sentence)
+                                
+                                if complete_sentences:
+                                    # Envoyer les nouvelles phrases complètes
+                                    new_sentences_text = " ".join(complete_sentences)
+                                    
+                                    # Synthétiser la voix pour cette phrase et l'envoyer
+                                    audio_base64, _ = self.parler(new_sentences_text)
+                                    
+                                    socketio.emit('response_chunk', {
+                                        'text': new_sentences_text,
+                                        'audio': audio_base64,
+                                        'isComplete': False
+                                    })
+                                    
+                                    # Mettre à jour le tampon pour ne garder que la phrase incomplète
+                                    buffer = sentences[-1]
+                    except json.JSONDecodeError:
+                        print(f"Erreur décodage JSON: {line}")
+                        continue
+                    
+                    # Détecter la fin du streaming
+                    if 'done' in chunk_data and chunk_data['done']:
+                        # Envoyer le reste du buffer s'il n'est pas vide
+                        if buffer.strip():
+                            # Synthétiser la voix pour la dernière phrase
+                            last_audio_base64, _ = self.parler(buffer)
+                            
+                            socketio.emit('response_chunk', {
+                                'text': buffer,
+                                'audio': last_audio_base64,
+                                'isComplete': False
+                            })
+                            
+                            current_sentences.append(buffer)
+                        
+                        # Envoyer la fin du streaming sans audio (déjà joué phrase par phrase)
+                        socketio.emit('response_complete', {
+                            'lastUserMessage': question,
+                            'isComplete': True
+                        })
+                        
+                        # Mise à jour de l'historique de conversation
+                        if len(self.conversation_history) > 10:
+                            self.conversation_history = self.conversation_history[-10:]
+                        self.conversation_history.append(question)
+                        self.conversation_history.append(full_response)
+                        
+                        break
+            
+            return full_response
+            
+        except Exception as e:
+            print(f"❌ Exception lors du streaming depuis Ollama: {e}")
+            error_msg = ERROR_MESSAGES[self.tts_lang]["model_access"]
+            socketio.emit('response', {'text': error_msg, 'isComplete': True})
+            return None
 
     def analyser_audio(self, audio_data):
         try:

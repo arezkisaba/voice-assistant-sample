@@ -16,6 +16,12 @@ class UIController {
             ttsLangSelector: null,
             audioLevelMeter: null
         };
+        
+        // Variables pour gérer le streaming des réponses
+        this.isStreamingResponse = false;
+        this.currentStreamingMessageDiv = null;
+        this.currentStreamingContentDiv = null;
+        this.streamedText = '';
     }
 
     initElements() {
@@ -205,6 +211,82 @@ class UIController {
         } else {
             this.elements.audioLevelMeter.classList.add('high-level');
         }
+    }
+
+    // Méthode pour commencer le streaming d'une réponse
+    startStreamingResponse(initialText) {
+        this.isStreamingResponse = true;
+        this.streamedText = initialText;
+        
+        // Créer un nouveau message pour l'assistant
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        const paragraph = document.createElement('p');
+        paragraph.textContent = initialText;
+        contentDiv.appendChild(paragraph);
+        
+        messageDiv.appendChild(contentDiv);
+        this.elements.conversation.appendChild(messageDiv);
+        
+        // Stocker les références pour pouvoir les mettre à jour
+        this.currentStreamingMessageDiv = messageDiv;
+        this.currentStreamingContentDiv = contentDiv;
+        
+        this.scrollToBottom();
+    }
+    
+    // Méthode pour ajouter du texte à la réponse en cours de streaming
+    appendToStreamingResponse(textChunk) {
+        if (!this.isStreamingResponse || !this.currentStreamingContentDiv) {
+            // Si pour une raison quelconque nous ne sommes pas en mode streaming, commencer un nouveau message
+            this.startStreamingResponse(textChunk);
+            return;
+        }
+        
+        // Ajouter le nouveau morceau de texte
+        this.streamedText += ' ' + textChunk;
+        
+        // Vérifier si le texte contient du Markdown
+        const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s)/.test(this.streamedText);
+        
+        if (hasMarkdown) {
+            // Utiliser Markdown pour le formatage
+            this.currentStreamingContentDiv.innerHTML = marked.parse(this.streamedText);
+            this.currentStreamingContentDiv.classList.add('markdown-content');
+            
+            // Ajouter la coloration syntaxique pour les blocs de code
+            if (this.streamedText.includes('```')) {
+                this.applyCodeHighlighting(this.currentStreamingContentDiv);
+            }
+        } else {
+            // Texte simple
+            const paragraph = this.currentStreamingContentDiv.querySelector('p');
+            if (paragraph) {
+                paragraph.textContent = this.streamedText;
+            } else {
+                const newParagraph = document.createElement('p');
+                newParagraph.textContent = this.streamedText;
+                this.currentStreamingContentDiv.appendChild(newParagraph);
+            }
+        }
+        
+        this.scrollToBottom();
+    }
+    
+    // Méthode pour finaliser la réponse en streaming
+    completeStreamingResponse() {
+        // Réinitialiser les variables de streaming
+        this.isStreamingResponse = false;
+        this.currentStreamingMessageDiv = null;
+        this.currentStreamingContentDiv = null;
+        this.streamedText = '';
+        
+        // S'assurer que le défilement est à jour
+        this.scrollToBottom();
     }
 }
 
