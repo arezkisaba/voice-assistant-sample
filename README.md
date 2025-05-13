@@ -1,47 +1,18 @@
-# Voice Assistant Sample
+Voici les ingrédients nécessaires pour faire des tomates farcies :
 
-A French voice assistant powered by Python, Ollama. Supports voice commands in French/English with smart audio detection and noise suppression.
+* 4 à 6 tomates mûres
 
-## Features
+* 200 grammes de riz cuit
 
-- Listen to your voice commands in French and English
-- Process your requests through the selected model
-- Respond verbally in French with clear and concise answers
-- Exit when hearing commands like "au revoir", "stop", "bye", etc.
+* 150 grammes de viande hachée (boeuf ou porc)
 
-It features optimized audio detection with noise suppression and enhanced French language recognition.
+* 1 oignon finement haché
 
-# Setup
+* 2 gousses d'ail émincées
 
-## Python3.11 virtual environment creation (Windows)
-```bash
-python.exe -m venv py_311
-.\py_311\Scripts\activate
-python --version
-```
+* 1 cuillère à soupe d'huile d'olive
 
-## Python3.11 virtual environment creation (Linux)
-```bash
-python3.11 -m venv py_311
-source ./py_311/bin/activate
-python3.11 --version
-```
+* Sel et poivre
 
-## Dependencies installation
-```bash
-pip install --upgrade pip
-pip install --upgrade setuptools
-pip install --upgrade wheel
-pip install -r ./requirements.txt
-```
-
-# Dataset generation & Training
-## Openimages backgrounds download
-```bash
-python3.11 ./src/scripts/main.py
-````
-
-OpenRouter
-RAG => Ajout données contextuelles moi
-Rendu phrase par phrase
-Auto-scroll during stream result
+* Fromage râpé (facultatif)
+Vous pouvez également ajouter d'autres ingrédients selon vos goûts, tels que des herbes fraîches ou du fromage bleu.

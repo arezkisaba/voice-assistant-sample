@@ -143,7 +143,7 @@ class AudioRecorder {
 
     queueAudioForPlayback(base64Audio) {
         this.audioQueue.push(base64Audio);
-        console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
+        // console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
         if (!this.isPlayingQueuedAudio) {
             this.playNextQueuedAudio();
         }

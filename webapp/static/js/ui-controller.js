@@ -193,18 +193,41 @@ class UIController {
 
     startStreamingResponse(initialText) {
         this.isStreamingResponse = true;
+        
+        // Traitement initial du texte pour s'assurer que les caractères sont correctement traités
         this.streamedText = initialText;
+        
+        // Créer un nouveau message pour l'assistant
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
+        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        const paragraph = document.createElement('p');
-        paragraph.textContent = initialText;
-        contentDiv.appendChild(paragraph);
+        
+        // Vérifie si le texte contient des caractères de mise en forme Markdown
+        const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s|\n\n|\n\*)/.test(this.streamedText);
+        
+        if (hasMarkdown) {
+            // Utiliser Markdown pour le formatage initial
+            contentDiv.innerHTML = marked.parse(this.streamedText, {
+                breaks: true,  // Convertir les retours à la ligne simples en <br>
+                gfm: true      // Utiliser GitHub Flavored Markdown
+            });
+            contentDiv.classList.add('markdown-content');
+        } else {
+            // Texte simple
+            const paragraph = document.createElement('p');
+            paragraph.textContent = this.streamedText;
+            contentDiv.appendChild(paragraph);
+        }
+        
         messageDiv.appendChild(contentDiv);
         this.elements.conversation.appendChild(messageDiv);
+        
+        // Stocker les références pour pouvoir les mettre à jour
         this.currentStreamingMessageDiv = messageDiv;
         this.currentStreamingContentDiv = contentDiv;
+        
         this.scrollToBottom();
     }
     
@@ -213,81 +236,51 @@ class UIController {
             this.startStreamingResponse(textChunk);
             return;
         }
+
+        let processedChunk = textChunk;
+        processedChunk = processedChunk.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
+            return String.fromCharCode(parseInt(code, 16));
+        });
+        processedChunk = processedChunk.replace(/\\n/g, '\n');
         
-        // Vérifier si le nouveau chunk commence par un élément de liste numérotée ou contient du formatage
-        const isNumberedListItem = textChunk.trim().match(/^\d+\.\s/);
-        const containsFormatting = textChunk.includes('*') || textChunk.includes('_') || textChunk.includes('`');
-        
-        // Ajouter le nouveau morceau de texte en préservant les retours à la ligne et le formatage
-        if (textChunk.trim().startsWith('\n') || textChunk.trim().startsWith('\r\n')) {
-            this.streamedText += textChunk;
-        } else if (isNumberedListItem) {
-            // Si c'est un élément de liste numérotée, s'assurer qu'il commence sur une nouvelle ligne
-            if (!this.streamedText.endsWith('\n') && !this.streamedText.endsWith('\r\n') && this.streamedText.length > 0) {
-                this.streamedText += '\n' + textChunk;
+        const isListItem = processedChunk.trim().match(/^(\d+\.|\*|\-|\+)\s/);
+        if (isListItem) {
+            console.log('1');
+            if (!this.streamedText.endsWith('\n') && this.streamedText.length > 0) {
+                this.streamedText += '\n' + processedChunk;
             } else {
-                this.streamedText += textChunk;
+                this.streamedText += processedChunk;
             }
         } else {
-            // Vérifier si le texte existant se termine par un retour à la ligne
-            const endsWithNewline = this.streamedText.endsWith('\n') || this.streamedText.endsWith('\r\n');
-            // Vérifier si textChunk contient du Markdown qui nécessite un retour à la ligne
-            const isNewParagraph = textChunk.trim().match(/^(\#{1,6}|\*|\-|\+|\d+\.)\s/);
-            
-            // Si le chunk contient un formatage spécial, être prudent avec les espaces
-            if (containsFormatting) {
-                // Préserver les délimiteurs de formatage en évitant d'ajouter des espaces qui pourraient les casser
-                const lastChar = this.streamedText.slice(-1);
-                const firstChar = textChunk.charAt(0);
-                
-                // Éviter d'ajouter un espace si cela casserait le formatage
-                // Par exemple, ne pas ajouter d'espace entre 'texte' et '**gras**'
-                if (lastChar === '*' || lastChar === '_' || lastChar === '`' || 
-                    firstChar === '*' || firstChar === '_' || firstChar === '`') {
-                    this.streamedText += textChunk;
-                } else if (endsWithNewline || isNewParagraph) {
-                    this.streamedText += textChunk;
-                } else {
-                    this.streamedText += ' ' + textChunk;
-                }
-            } else if (endsWithNewline || isNewParagraph) {
-                this.streamedText += textChunk;
-            } else {
-                this.streamedText += ' ' + textChunk;
-            }
+            console.log('2');
+            this.streamedText += processedChunk;
         }
-        
-        // Prétraiter le texte pour gérer correctement les listes et le formatage
+
         let processedText = this.streamedText;
-        
-        // Remplacer les motifs de liste numérotée pour s'assurer qu'ils sont sur des lignes séparées
-        processedText = processedText.replace(/(\S)(\s*)(\d+\.\s)/g, '$1\n$3');
-        
-        // S'assurer que les balises de formatage sont correctement espacées
-        // Éviter les espaces indésirables autour des balises de mise en forme
-        processedText = processedText.replace(/\s+\*\*/g, ' **').replace(/\*\*\s+/g, '** ');
-        processedText = processedText.replace(/\s+\*/g, ' *').replace(/\*\s+/g, '* ');
-        processedText = processedText.replace(/\s+__/g, ' __').replace(/__\s+/g, '__ ');
-        processedText = processedText.replace(/\s+_/g, ' _').replace(/_\s+/g, '_ ');
-        processedText = processedText.replace(/\s+`/g, ' `').replace(/`\s+/g, '` ');
-        
-        // Vérifier si le texte contient du Markdown
+        // processedText = processedText.replace(/([^\n])(\s*)(\*|\-|\+|\d+\.)\s/g, '$1\n$3 ');
+        processedText = processedText.replace(/\*\*[ ]+/g, '**');
+        processedText = processedText.replace(/^(\s*)(\*\*|\*)(.*)$/gm, '\n$1$2$3\n');
+        // processedText = processedText.replace(/\*\*\s+/g, '**');
+        // processedText = processedText.replace(/\*\*\s+/g, '*');
+        // processedText = processedText.replace(/\s+\*/g, ' *').replace(/\*\s+/g, '* ');
+        // processedText = processedText.replace(/\s+__/g, ' __').replace(/__\s+/g, '__ ');
+        // processedText = processedText.replace(/\s+_/g, ' _').replace(/_\s+/g, '_ ');
+        // processedText = processedText.replace(/\s+`/g, ' `').replace(/`\s+/g, '` ');
+
+        console.warn("Texte reçu :", textChunk);
+        console.log("Texte complet :", processedText);
+
         const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s|\d+\.\s|\*[^*]+\*|_[^_]+_)/.test(processedText);
-        
         if (hasMarkdown) {
-            // Utiliser Markdown pour le formatage avec les options pour préserver les retours à la ligne
             this.currentStreamingContentDiv.innerHTML = marked.parse(processedText, { 
-                breaks: true,  // Convertir les retours à la ligne simples en <br>
-                gfm: true      // Utiliser GitHub Flavored Markdown
+                breaks: true,
+                gfm: true
             });
             this.currentStreamingContentDiv.classList.add('markdown-content');
-            
-            // Ajouter la coloration syntaxique pour les blocs de code
             if (processedText.includes('```')) {
                 this.applyCodeHighlighting(this.currentStreamingContentDiv);
             }
         } else {
-            // Texte simple
             const paragraph = this.currentStreamingContentDiv.querySelector('p');
             if (paragraph) {
                 paragraph.textContent = processedText;

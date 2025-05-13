@@ -57,11 +57,9 @@ RESPONSE_MESSAGES = {
 FLASK_SECRET_KEY = "voiceassistantsecret"
 
 OLLAMA_OPTIONS = {
-    "temperature": 0.7,
+    "temperature": 0.0,
     "top_p": 0.9
 }
 
 AUDIO_SPEED_FACTOR = 1.5
-
-# Flag pour gérer l'annulation de la synthèse vocale
 CANCEL_SPEECH_SYNTHESIS = [False]

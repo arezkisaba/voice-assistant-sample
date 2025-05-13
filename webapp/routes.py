@@ -32,10 +32,7 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
                         is_processing_ref[0] = False
                         socketio.emit('listening_stopped')
                     else:
-                        # Utiliser le streaming pour renvoyer la réponse phrase par phrase
                         assistant.obtenir_reponse_ollama_stream(texte, socketio)
-                        
-                        # La réponse complète est maintenant gérée par le streaming
                 else:
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
                     socketio.emit('error', {'message': error_msg})
@@ -78,9 +75,6 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
     def handle_start_listening():
         if not is_processing_ref[0]:
             is_processing_ref[0] = True
-            
-            # Réinitialiser l'historique de conversation lorsque l'utilisateur recommence à parler
-            # après avoir dit un mot d'arrêt
             if global_assistant.conversation_history and any(mot in ' '.join(global_assistant.conversation_history[-2:]).lower() for mot in 
                   STOP_WORDS["fr"] + STOP_WORDS["en"]):
                 global_assistant.conversation_history = []
@@ -148,10 +142,7 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
             is_processing_ref[0] = False
             emit('listening_stopped')
         else:
-            # Utiliser le streaming pour renvoyer la réponse phrase par phrase
             global_assistant.obtenir_reponse_ollama_stream(texte, socketio)
-            
-            # La réponse complète est maintenant gérée par le streaming
             
     @socketio.on('cancel_speech')
     def handle_cancel_speech():

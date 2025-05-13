@@ -34,13 +34,22 @@ class SocketManager {
         
         this.socket.on('response_chunk', (data) => {
             audioRecorder.blockRecordingUntilFullResponse = true;
+            let processedText = data.text;
+            if (typeof processedText === 'string' && 
+                (processedText.startsWith('"') && processedText.endsWith('"'))) {
+                try {
+                    processedText = JSON.parse(processedText);
+                } catch (e) {
+                    console.log("Impossible de parser le texte comme JSON:", e);
+                }
+            }
             
             if (!uiController.isStreamingResponse) {
                 uiController.hideAssistantLoading();
                 uiController.disableTextInput(false);
-                uiController.startStreamingResponse(data.text);
+                uiController.startStreamingResponse(processedText);
             } else {
-                uiController.appendToStreamingResponse(data.text);
+                uiController.appendToStreamingResponse(processedText);
             }
             
             if (data.audio) {
