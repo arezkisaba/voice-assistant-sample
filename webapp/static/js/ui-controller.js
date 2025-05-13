@@ -54,16 +54,26 @@ class UIController {
         this.elements.audioLevelMeter = document.getElementById('audio-level-meter');
     }
 
-    updateRecordingUI(isRecording) {
-        if (isRecording) {
+    updateRecordingUI(isRecording, isGeneratingResponse = false) {
+        if (isGeneratingResponse) {
+            this.elements.startRecordingBtn.classList.remove('recording');
+            this.elements.startRecordingBtn.classList.add('interrupting');
+            this.elements.startRecordingBtn.innerHTML = '<span class="icon">✖</span> Interrompre';
+        } else if (isRecording) {
             this.elements.startRecordingBtn.classList.add('recording');
+            this.elements.startRecordingBtn.classList.remove('interrupting');
             this.elements.startRecordingBtn.innerHTML = '<span class="icon">⏹</span> Arrêter';
+            this.elements.recordingStatus.style.visibility = 'visible';
             this.elements.recordingIndicator.classList.add('active');
+            this.elements.recordingIndicator.classList.remove('responding');
             this.elements.recordingText.textContent = 'Enregistrement...';
         } else {
             this.elements.startRecordingBtn.classList.remove('recording');
+            this.elements.startRecordingBtn.classList.remove('interrupting');
             this.elements.startRecordingBtn.innerHTML = '<span class="icon">🎤</span> Parler';
+            this.elements.recordingStatus.style.visibility = 'hidden';
             this.elements.recordingIndicator.classList.remove('active');
+            this.elements.recordingIndicator.classList.remove('responding');
             this.elements.recordingText.textContent = 'Inactive';
         }
     }
@@ -152,8 +162,10 @@ class UIController {
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
-        this.elements.recordingText.textContent = 'Assistant parle...';
-        this.elements.recordingStatus.classList.add('speaking');
+        // this.elements.recordingText.textContent = 'Assistant parle...';
+        // this.elements.recordingStatus.classList.add('speaking');
+        
+        this.updateRecordingUI(false, true);
         
         if (this.elements.cancelSpeechBtn) {
             this.elements.cancelSpeechBtn.classList.remove('hidden');
@@ -161,16 +173,13 @@ class UIController {
         
         this.elements.audioPlayer.onended = () => {
             this.stopSpeaking();
+            this.updateRecordingUI(false, false);
         };
     }
     
     stopSpeaking() {
-        if (this.elements.cancelSpeechBtn) {
-            this.elements.cancelSpeechBtn.classList.add('hidden');
-        }
-        
-        this.elements.recordingStatus.classList.remove('speaking');
-        this.elements.recordingText.textContent = 'Inactive';
+        // this.elements.recordingStatus.classList.remove('speaking');
+        // this.elements.recordingText.textContent = 'Inactive';
     }
 
     clearInput() {

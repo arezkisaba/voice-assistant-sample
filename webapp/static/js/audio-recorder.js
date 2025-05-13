@@ -14,7 +14,7 @@ class AudioRecorder {
         this.silenceAudioFrameCount = 0;
         this.hasTalked = false;
         this.audioQueue = [];
-        this.isPlayingQueuedAudio = false;
+        // Suppression de isPlayingQueuedAudio, nous utiliserons uniquement config.isPlayingAudio
         this.blockRecordingUntilFullResponse = false;
     }
 
@@ -135,27 +135,50 @@ class AudioRecorder {
     }
 
     toggleRecording() {
-        if (!config.isRecording) {
-            config.manualStopped = false;
-            this.startRecording();
-        } else {
-            config.manualStopped = true;
-            this.stopRecording();
+        let actionTaken = false;
+        
+        // Gestion de l'interruption de la génération de réponse
+        if (socketManager.isGeneratingResponse) {
+            socketManager.handleShutdownWordDetection();
+            actionTaken = true;
+        }
+        
+        // Gestion de l'interruption de la synthèse vocale
+        if (this.audioQueue.length > 0 || config.isPlayingAudio) {
+            this.clearAudioQueue();
+            socketManager.cancelSpeech();
+            uiController.stopSpeaking();
+            uiController.setStatus('Synthèse vocale arrêtée');
+            actionTaken = true;
+        }
+        
+        // Si aucune action d'interruption n'a été effectuée, gérer le toggle normal d'enregistrement
+        if (!actionTaken) {
+            if (!config.isRecording) {
+                config.manualStopped = false;
+                this.startRecording();
+            } else {
+                config.manualStopped = true;
+                this.stopRecording();
+            }
         }
     }
 
     queueAudioForPlayback(base64Audio) {
         this.audioQueue.push(base64Audio);
         // console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
-        if (!this.isPlayingQueuedAudio) {
+        if (!config.isPlayingAudio) {
             this.playNextQueuedAudio();
         }
     }
     
     playNextQueuedAudio() {
         if (this.audioQueue.length === 0) {
-            this.isPlayingQueuedAudio = false;
+            config.isPlayingAudio = false;
             console.log('File d\'attente audio vide - réponse complète terminée');
+            
+            // Assurons-nous que l'UI est réinitialisée correctement
+            uiController.updateRecordingUI(false, false);
             return;
         }
         
@@ -164,13 +187,12 @@ class AudioRecorder {
         }
         
         config.isPlayingAudio = true;
-        this.isPlayingQueuedAudio = true;
+        uiController.updateRecordingUI(false, true);
+        
         const base64Audio = this.audioQueue.shift();
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         const audioPlayer = document.getElementById('audio-player');
         audioPlayer.src = audioSrc;
-        uiController.setRecordingStatusText('Assistant parle...');
-        document.getElementById('recording-status').classList.add('speaking');
         const cancelSpeechBtn = document.getElementById('cancel-speech');
         if (cancelSpeechBtn) {
             cancelSpeechBtn.classList.remove('hidden');
@@ -195,7 +217,7 @@ class AudioRecorder {
     
     clearAudioQueue() {
         this.audioQueue = [];
-        this.isPlayingQueuedAudio = false;
+        config.isPlayingAudio = false;
     }
 
     playAudio(base64Audio) {
@@ -215,7 +237,6 @@ class AudioRecorder {
     handleAudioPlaybackEnded() {
         console.log('Audio playback ended');
         config.isPlayingAudio = false;
-        this.isPlayingQueuedAudio = false;
         uiController.setRecordingStatusText('Inactive');
     }
 
@@ -251,7 +272,7 @@ class AudioRecorder {
         const normalizedLevel = Math.min(100, Math.max(0, level * 2));
         uiController.updateAudioLevel(normalizedLevel);
 
-        if (level < 15) {
+        if (level < 30) {
             this.handleSilence();
             if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
                 console.log('Sentence end detected, stopping recording');
@@ -272,6 +293,20 @@ class AudioRecorder {
     
     handleSilence() {
         this.silenceAudioFrameCount++;
+    }
+
+    handleStopWord() {
+        // Play shutdown sound
+        uiSoundManager.playShutdownSound()
+            .then(() => {
+                console.log('Shutdown sound played successfully');
+            })
+            .catch(error => {
+                console.error('Error playing shutdown sound:', error);
+            });
+            
+        // Cancel any ongoing speech and response generation
+        socketManager.handleStopWordDetection();
     }
 }
 

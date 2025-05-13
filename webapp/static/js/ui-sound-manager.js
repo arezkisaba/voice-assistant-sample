@@ -72,7 +72,7 @@ class UISoundManager {
                 };
             });
         } catch (error) {
-            console.error('Erreur lors de la lecture du son d\'écoute:', error);
+            console.error('Erreur lors de la lecture du son de shutdown:', error);
             throw error;
         }
     }
@@ -82,6 +82,8 @@ class UISoundManager {
         this.sounds.listening.currentTime = 0;
         this.sounds.thinking.pause();
         this.sounds.thinking.currentTime = 0;
+        this.sounds.shutdown.pause();
+        this.sounds.shutdown.currentTime = 0;
     }
 }
 

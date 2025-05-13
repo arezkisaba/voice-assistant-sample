@@ -184,6 +184,14 @@ header p {
     animation: pulse 1.5s infinite;
 }
 
+.record-btn.interrupting {
+    background: linear-gradient(90deg, #ff9800 0%, #ff5722 100%) !important;
+    animation: pulse 1.5s infinite;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(255, 152, 0, 0.7);
+    transform: scale(1.05);
+}
+
 .cancel-btn {
     background: #777;
     color: white;
@@ -239,30 +247,9 @@ header p {
     animation: blink 1s infinite;
 }
 
-.cancel-speech-btn {
-    background: none;
-    border: none;
-    color: #666;
-    font-size: 0.9rem;
-    cursor: pointer;
-    margin-left: 4px;
-    padding: 4px 8px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    transition: all 0.2s;
-    opacity: 0.7;
-}
-
-.cancel-speech-btn:hover {
-    background-color: rgba(229, 57, 53, 0.1);
-    color: #e53935;
-    opacity: 1;
-}
-
-.cancel-speech-btn.active {
-    background-color: rgba(229, 57, 53, 0.2);
-    color: #e53935;
+.recording-indicator.responding {
+    background-color: #ff9800 !important;
+    animation: blink 1s infinite;
 }
 
 .hidden {

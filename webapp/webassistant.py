@@ -66,7 +66,6 @@ class WebAssistant:
             return None, texte
     
     def _markdown_to_text(self, markdown_text):
-        """Convertit le markdown en texte brut pour la synthèse vocale."""
         if not markdown_text:
             return ""
             
@@ -189,12 +188,13 @@ class WebAssistant:
             return ERROR_MESSAGES[self.tts_lang]["model_access"]
 
     def obtenir_reponse_ollama_stream(self, question, socketio):
-        """Version streaming de l'obtention de réponse qui envoie les résultats par bloc de texte délimité par des retours à la ligne"""
         import re
         import requests
         import json
         
-        # Création du contexte
+        # Réinitialiser le drapeau d'annulation au début d'une nouvelle requête
+        CANCEL_RESPONSE_STREAMING[0] = False
+        
         context_messages = []
         current_lang = self.tts_lang
         for i, msg in enumerate(self.conversation_history):
@@ -223,15 +223,27 @@ class WebAssistant:
                 socketio.emit('response', {'text': error_msg, 'isComplete': True})
                 return
             
-            # Variables pour la gestion du texte
             full_response = ""
             buffer = ""
             current_blocks = []
             
-            # Utiliser \n comme délimiteur au lieu des points de fin de phrase
             newline_pattern = r'\n'
             
             for line in response_stream.iter_lines():
+                # Vérifier si une annulation a été demandée
+                if CANCEL_RESPONSE_STREAMING[0]:
+                    print("🛑 Streaming de la réponse annulé par l'utilisateur")
+                    # Envoyer un message d'annulation
+                    cancel_msg = RESPONSE_MESSAGES[self.tts_lang]["response_cancelled"]
+                    socketio.emit('response_complete', {
+                        'lastUserMessage': question,
+                        'isComplete': True,
+                        'cancelled': True
+                    })
+                    
+                    # Ne pas ajouter la réponse incomplète à l'historique
+                    return None
+                
                 if line:
                     try:
                         chunk_data = json.loads(line)
@@ -240,38 +252,48 @@ class WebAssistant:
                             buffer += chunk_text
                             full_response += chunk_text
                             
-                            # Diviser le texte en blocs selon les retours à la ligne
                             if '\n' in buffer:
-                                # Diviser le buffer selon les retours à la ligne
                                 blocks = buffer.split('\n')
-                                
-                                # Tous les blocs sauf le dernier sont complets
                                 complete_blocks = blocks[:-1]
                                 
                                 if complete_blocks:
-                                    # Joindre les blocs complets avec des retours à la ligne
                                     blocks_text = '\n'.join(complete_blocks)
                                     current_blocks.extend(complete_blocks)
                                     
-                                    # Convertir le texte en audio et l'envoyer
+                                    # Vérifier à nouveau si une annulation a été demandée
+                                    if CANCEL_RESPONSE_STREAMING[0]:
+                                        print("🛑 Streaming de la réponse annulé pendant la synthèse vocale")
+                                        socketio.emit('response_complete', {
+                                            'lastUserMessage': question,
+                                            'isComplete': True,
+                                            'cancelled': True
+                                        })
+                                        return None
+                                    
                                     audio_base64, _ = self.parler(blocks_text)
                                     
-                                    # Envoyer le bloc au client
                                     socketio.emit('response_chunk', {
                                         'text': blocks_text,
                                         'audio': audio_base64,
                                         'isComplete': False
                                     })
                                     
-                                    # Le dernier bloc est incomplet, il devient le nouveau buffer
                                     buffer = blocks[-1]
                     except json.JSONDecodeError:
                         print(f"Erreur décodage JSON: {line}")
                         continue
                     
-                    # Traitement de la fin du streaming
                     if 'done' in chunk_data and chunk_data['done']:
-                        # Envoyer le reste du buffer s'il n'est pas vide
+                        # Vérifier une dernière fois si une annulation a été demandée
+                        if CANCEL_RESPONSE_STREAMING[0]:
+                            print("🛑 Streaming de la réponse annulé à la fin")
+                            socketio.emit('response_complete', {
+                                'lastUserMessage': question,
+                                'isComplete': True,
+                                'cancelled': True
+                            })
+                            return None
+                            
                         if buffer.strip():
                             last_audio_base64, _ = self.parler(buffer)
                             socketio.emit('response_chunk', {
@@ -282,13 +304,11 @@ class WebAssistant:
                             
                             current_blocks.append(buffer)
                         
-                        # Envoyer l'événement de fin de réponse
                         socketio.emit('response_complete', {
                             'lastUserMessage': question,
                             'isComplete': True
                         })
                         
-                        # Mise à jour de l'historique de conversation
                         if len(self.conversation_history) > 10:
                             self.conversation_history = self.conversation_history[-10:]
                         self.conversation_history.append(question)

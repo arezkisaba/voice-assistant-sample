@@ -38,10 +38,6 @@ class App {
         uiController.elements.textInput.addEventListener('keypress', this.handleTextInputKeypress.bind(this));
         uiController.elements.startRecordingBtn.addEventListener('click', this.handleToggleRecording.bind(this));
         uiController.elements.audioPlayer.addEventListener('ended', this.handleAudioPlaybackEnded.bind(this));
-        const cancelSpeechBtn = document.getElementById('cancel-speech');
-        if (cancelSpeechBtn) {
-            cancelSpeechBtn.addEventListener('click', this.handleCancelSpeech.bind(this));
-        }
     }
 
     handleSendTextMessage() {
@@ -75,29 +71,6 @@ class App {
         socketManager.changeTtsLang(config.currentTtsLang);
         const langLabel = config.currentTtsLang === 'fr' ? 'Français' : 'English';
         uiController.setStatus(`Langue TTS changée pour ${langLabel}`);
-    }
-
-    handleCancelSpeech() {
-        const cancelSpeechBtn = document.getElementById('cancel-speech');
-        cancelSpeechBtn.classList.add('active');
-        audioRecorder.clearAudioQueue();
-        socketManager.cancelSpeech();
-        uiController.stopSpeaking();
-
-        if (!uiController.isStreamingResponse) {
-            console.log("Débloquage de l'enregistrement après annulation de la synthèse vocale");
-            audioRecorder.blockRecordingUntilFullResponse = false;
-            
-            if (!config.isRecording && !config.manualStopped) {
-                setTimeout(() => {
-                    audioRecorder.startRecording();
-                }, 500);
-            }
-        }
-        
-        setTimeout(() => {
-            cancelSpeechBtn.classList.remove('active');
-        }, 300);
     }
 }
 

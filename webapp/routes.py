@@ -138,16 +138,28 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
                 'lastUserMessage': texte,
                 'isComplete': True
             })
-            
+
             is_processing_ref[0] = False
             emit('listening_stopped')
         else:
             global_assistant.obtenir_reponse_ollama_stream(texte, socketio)
-            
-    @socketio.on('cancel_speech')
-    def handle_cancel_speech():
-        """Annuler la synthèse vocale en cours"""
+
+    @socketio.on('cancel_response')
+    def handle_cancel_response():
         CANCEL_SPEECH_SYNTHESIS[0] = True
-        status_message = RESPONSE_MESSAGES[global_assistant.tts_lang]["speech_cancelled"]
-        print("Synthèse vocale annulée par l'utilisateur")
+        # Activer le drapeau d'annulation du streaming de réponse
+        CANCEL_RESPONSE_STREAMING[0] = True
+        
+        if is_processing_ref[0]:
+            is_processing_ref[0] = False
+        
+        while not audio_queue.empty():
+            try:
+                audio_queue.get_nowait()
+                audio_queue.task_done()
+            except queue.Empty:
+                break
+        
+        status_message = RESPONSE_MESSAGES[global_assistant.tts_lang]["response_cancelled"]
+        print("Génération de réponse annulée par l'utilisateur")
         emit('status', {'message': status_message})

@@ -6,7 +6,8 @@ const config = {
     isPlayingAudio: false,
     continuousListening: true,
     manualStopped: false,
-    stopWords: ["au revoir", "bye"]
+    stopWords: ["au revoir", "bye"], // Mots pour terminer la conversation
+    shutdownWords: ["stop", "arrête", "interrompt", "tais-toi", "silence"] // Mots pour interrompre la réponse du LLM
 };
 
 export default config;
