@@ -162,9 +162,6 @@ class UIController {
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
-        // this.elements.recordingText.textContent = 'Assistant parle...';
-        // this.elements.recordingStatus.classList.add('speaking');
-        
         this.updateRecordingUI(false, true);
         
         if (this.elements.cancelSpeechBtn) {

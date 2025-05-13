@@ -192,7 +192,6 @@ class WebAssistant:
         import requests
         import json
         
-        # Réinitialiser le drapeau d'annulation au début d'une nouvelle requête
         CANCEL_RESPONSE_STREAMING[0] = False
         
         context_messages = []
@@ -227,21 +226,14 @@ class WebAssistant:
             buffer = ""
             current_blocks = []
             
-            newline_pattern = r'\n'
-            
             for line in response_stream.iter_lines():
-                # Vérifier si une annulation a été demandée
                 if CANCEL_RESPONSE_STREAMING[0]:
                     print("🛑 Streaming de la réponse annulé par l'utilisateur")
-                    # Envoyer un message d'annulation
-                    cancel_msg = RESPONSE_MESSAGES[self.tts_lang]["response_cancelled"]
                     socketio.emit('response_complete', {
                         'lastUserMessage': question,
                         'isComplete': True,
                         'cancelled': True
                     })
-                    
-                    # Ne pas ajouter la réponse incomplète à l'historique
                     return None
                 
                 if line:
@@ -260,7 +252,6 @@ class WebAssistant:
                                     blocks_text = '\n'.join(complete_blocks)
                                     current_blocks.extend(complete_blocks)
                                     
-                                    # Vérifier à nouveau si une annulation a été demandée
                                     if CANCEL_RESPONSE_STREAMING[0]:
                                         print("🛑 Streaming de la réponse annulé pendant la synthèse vocale")
                                         socketio.emit('response_complete', {
@@ -284,7 +275,6 @@ class WebAssistant:
                         continue
                     
                     if 'done' in chunk_data and chunk_data['done']:
-                        # Vérifier une dernière fois si une annulation a été demandée
                         if CANCEL_RESPONSE_STREAMING[0]:
                             print("🛑 Streaming de la réponse annulé à la fin")
                             socketio.emit('response_complete', {

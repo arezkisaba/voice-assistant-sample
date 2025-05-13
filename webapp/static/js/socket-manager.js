@@ -44,11 +44,7 @@ class SocketManager {
             this.isGeneratingResponse = true;
             console.log("--- RÉCEPTION CHUNK DE RÉPONSE ---");
             console.log("isGeneratingResponse mis à true");
-            
-            // Mettre à jour l'UI pour montrer l'état d'interruption
             uiController.updateRecordingUI(false, true);
-            
-            // Vérifions l'état du bouton après la mise à jour
             const startRecordingBtn = document.getElementById('start-recording');
             console.log("État du bouton:", {
                 isInterrupting: startRecordingBtn.classList.contains('interrupting'),
@@ -80,7 +76,6 @@ class SocketManager {
                 audioRecorder.queueAudioForPlayback(data.audio);
             }
             
-            // Forcer l'application de l'état d'interruption à nouveau
             setTimeout(() => {
                 if (this.isGeneratingResponse) {
                     console.log("Réapplication de l'état d'interruption après délai");
@@ -91,15 +86,11 @@ class SocketManager {
         
         this.socket.on('response_complete', (data) => {
             this.isGeneratingResponse = false;
-            // Restaurer l'UI après la fin de la génération
             uiController.updateRecordingUI(false, false);
-            
             uiController.completeStreamingResponse();
             
-            // Vérifier si la réponse a été annulée
             if (data.cancelled) {
                 console.log("🛑 Réponse annulée, nettoyage de l'interface");
-                // Ne pas ajouter cette réponse à l'historique de conversation
                 audioRecorder.clearAudioQueue();
                 uiController.setStatus('Génération de réponse arrêtée');
                 return;
@@ -240,12 +231,6 @@ class SocketManager {
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
         }
-        
-        // Reset UI elements related to speech
-        document.getElementById('recording-status').classList.remove('speaking');
-        
-        // Ne pas cacher automatiquement le bouton ici, car il peut être nécessaire
-        // pendant la synthèse vocale même après l'arrêt d'un audio spécifique
     }
 }
 

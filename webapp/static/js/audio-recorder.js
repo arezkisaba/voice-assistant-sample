@@ -14,7 +14,6 @@ class AudioRecorder {
         this.silenceAudioFrameCount = 0;
         this.hasTalked = false;
         this.audioQueue = [];
-        // Suppression de isPlayingQueuedAudio, nous utiliserons uniquement config.isPlayingAudio
         this.blockRecordingUntilFullResponse = false;
     }
 
@@ -136,14 +135,11 @@ class AudioRecorder {
 
     toggleRecording() {
         let actionTaken = false;
-        
-        // Gestion de l'interruption de la génération de réponse
         if (socketManager.isGeneratingResponse) {
             socketManager.handleShutdownWordDetection();
             actionTaken = true;
         }
         
-        // Gestion de l'interruption de la synthèse vocale
         if (this.audioQueue.length > 0 || config.isPlayingAudio) {
             this.clearAudioQueue();
             socketManager.cancelSpeech();
@@ -152,7 +148,6 @@ class AudioRecorder {
             actionTaken = true;
         }
         
-        // Si aucune action d'interruption n'a été effectuée, gérer le toggle normal d'enregistrement
         if (!actionTaken) {
             if (!config.isRecording) {
                 config.manualStopped = false;
@@ -166,7 +161,6 @@ class AudioRecorder {
 
     queueAudioForPlayback(base64Audio) {
         this.audioQueue.push(base64Audio);
-        // console.log(`Audio ajouté à la file d'attente. Taille de la file: ${this.audioQueue.length}`);
         if (!config.isPlayingAudio) {
             this.playNextQueuedAudio();
         }
@@ -176,8 +170,6 @@ class AudioRecorder {
         if (this.audioQueue.length === 0) {
             config.isPlayingAudio = false;
             console.log('File d\'attente audio vide - réponse complète terminée');
-            
-            // Assurons-nous que l'UI est réinitialisée correctement
             uiController.updateRecordingUI(false, false);
             return;
         }
@@ -296,7 +288,6 @@ class AudioRecorder {
     }
 
     handleStopWord() {
-        // Play shutdown sound
         uiSoundManager.playShutdownSound()
             .then(() => {
                 console.log('Shutdown sound played successfully');
@@ -304,8 +295,6 @@ class AudioRecorder {
             .catch(error => {
                 console.error('Error playing shutdown sound:', error);
             });
-            
-        // Cancel any ongoing speech and response generation
         socketManager.handleStopWordDetection();
     }
 }
