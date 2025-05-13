@@ -1,6 +1,7 @@
 import config from './config.js';
 import uiController from './ui-controller.js';
 import audioRecorder from './audio-recorder.js';
+import uiSoundManager from './ui-sound-manager.js';
 
 class SocketManager {
     constructor() {
@@ -65,6 +66,7 @@ class SocketManager {
             
             if (userSaidGoodbye) {
                 config.manualStopped = true;
+                uiSoundManager.playShutdownSound();
             }
             
             const checkAudioQueueAndRestart = () => {

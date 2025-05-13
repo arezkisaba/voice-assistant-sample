@@ -132,13 +132,15 @@ class UIController {
     }
 
     scrollToBottom() {
-        requestAnimationFrame(() => {
-            const scrollContainer = document.querySelector('.conversation-container');
-            scrollContainer.scrollTo({
-                top: scrollContainer.scrollHeight,
-                behavior: 'smooth'
+        setTimeout(() => {
+            requestAnimationFrame(() => {
+                const scrollContainer = document.querySelector('.conversation-container');
+                scrollContainer.scrollTo({
+                    top: scrollContainer.scrollHeight,
+                    behavior: 'smooth'
+                });
             });
-        });
+        }, 500);
     }
 
     setStatus(message, isError = false) {
