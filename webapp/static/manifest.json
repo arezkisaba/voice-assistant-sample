@@ -1,7 +1,7 @@
 {
   "name": "Assistant Vocal Français",
   "short_name": "Assistant Vocal",
-  "description": "Assistant vocal français propulsé par Ollama",
+  "description": "Assistant vocal Ollama",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f7fa",

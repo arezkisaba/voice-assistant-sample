@@ -193,29 +193,20 @@ class UIController {
 
     startStreamingResponse(initialText) {
         this.isStreamingResponse = true;
-        
-        // Traitement initial du texte pour s'assurer que les caractères sont correctement traités
         this.streamedText = initialText;
-        
-        // Créer un nouveau message pour l'assistant
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
-        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        
-        // Vérifie si le texte contient des caractères de mise en forme Markdown
         const hasMarkdown = /(\*\*|__|##|```|\[.*\]\(.*\)|^\s*[-*+]\s|\|[-|]+\||^\s*>\s|\n\n|\n\*)/.test(this.streamedText);
         
         if (hasMarkdown) {
-            // Utiliser Markdown pour le formatage initial
             contentDiv.innerHTML = marked.parse(this.streamedText, {
-                breaks: true,  // Convertir les retours à la ligne simples en <br>
-                gfm: true      // Utiliser GitHub Flavored Markdown
+                breaks: true,
+                gfm: true
             });
             contentDiv.classList.add('markdown-content');
         } else {
-            // Texte simple
             const paragraph = document.createElement('p');
             paragraph.textContent = this.streamedText;
             contentDiv.appendChild(paragraph);
@@ -223,8 +214,6 @@ class UIController {
         
         messageDiv.appendChild(contentDiv);
         this.elements.conversation.appendChild(messageDiv);
-        
-        // Stocker les références pour pouvoir les mettre à jour
         this.currentStreamingMessageDiv = messageDiv;
         this.currentStreamingContentDiv = contentDiv;
         
@@ -252,20 +241,11 @@ class UIController {
                 this.streamedText += processedChunk;
             }
         } else {
-            console.log('2');
             this.streamedText += processedChunk;
         }
 
         let processedText = this.streamedText;
-        // processedText = processedText.replace(/([^\n])(\s*)(\*|\-|\+|\d+\.)\s/g, '$1\n$3 ');
-        processedText = processedText.replace(/\*\*[ ]+/g, '**');
-        processedText = processedText.replace(/^(\s*)(\*\*|\*)(.*)$/gm, '\n$1$2$3\n');
-        // processedText = processedText.replace(/\*\*\s+/g, '**');
-        // processedText = processedText.replace(/\*\*\s+/g, '*');
-        // processedText = processedText.replace(/\s+\*/g, ' *').replace(/\*\s+/g, '* ');
-        // processedText = processedText.replace(/\s+__/g, ' __').replace(/__\s+/g, '__ ');
-        // processedText = processedText.replace(/\s+_/g, ' _').replace(/_\s+/g, '_ ');
-        // processedText = processedText.replace(/\s+`/g, ' `').replace(/`\s+/g, '` ');
+        processedText = processedText.replace(/^(\*\*|\*|\d+\.)(.*)$/gm, '\n$1$2\n');
 
         console.warn("Texte reçu :", textChunk);
         console.log("Texte complet :", processedText);
