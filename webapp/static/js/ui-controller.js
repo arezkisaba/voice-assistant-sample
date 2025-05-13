@@ -1,3 +1,5 @@
+import uiSoundManager from './ui-sound-manager.js';
+
 class UIController {
     constructor() {
         this.elements = {
@@ -72,24 +74,28 @@ class UIController {
         }
     }
 
-    showAssistantLoading() {
+    async showAssistantLoading() {
         const conversation = document.getElementById('conversation');
         conversation.insertAdjacentElement('afterend', this.elements.assistantLoadingIndicator);
         this.elements.assistantLoadingIndicator.classList.add('active');
+        await uiSoundManager.playThinkingSound();
         this.scrollToBottom();
     }
 
     hideAssistantLoading() {
         this.elements.assistantLoadingIndicator.classList.remove('active');
+        uiSoundManager.stopAllSounds();
     }
 
-    showUserLoading() {
+    async showUserLoading() {
         this.elements.userLoadingIndicator.classList.add('active');
+        await uiSoundManager.playThinkingSound();
         this.scrollToBottom();
     }
 
     hideUserLoading() {
         this.elements.userLoadingIndicator.classList.remove('active');
+        uiSoundManager.stopAllSounds();
     }
 
     addMessage(sender, text) {

@@ -1,6 +1,7 @@
 import config from './config.js';
 import uiController from './ui-controller.js';
 import socketManager from './socket-manager.js';
+import uiSoundManager from './ui-sound-manager.js';
 
 class AudioRecorder {
     constructor() {
@@ -25,6 +26,8 @@ class AudioRecorder {
         }
         
         try {
+            await uiSoundManager.playListeningSound();
+            
             if (this.mediaRecorder) {
                 try {
                     if (this.mediaRecorder.state === 'recording') {
