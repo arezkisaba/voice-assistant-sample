@@ -16,6 +16,11 @@ Prioritize simplicity and clarity in your responses."""
 
 SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_TTS_LANG]
 
+ACTIVATION_WORDS = {
+    "fr": ["ok assistant"],
+    "en": ["ok assistant"]
+}
+
 STOP_WORDS = {
     "fr": ["au revoir"],
     "en": ["bye"]

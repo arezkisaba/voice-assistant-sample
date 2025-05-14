@@ -1,20 +1,20 @@
 import config from './config.js';
 import uiController from './ui-controller.js';
 import socketManager from './socket-manager.js';
-import uiSoundManager from './ui-sound-manager.js';
 
 class AudioRecorder {
     constructor() {
         this.mediaRecorder = null;
         this.audioChunks = [];
+        this.stream = null;
         this.audioContext = null;
         this.analyser = null;
         this.audioBuffer = [];
         this.audioSampleRate = 0;
         this.silenceAudioFrameCount = 0;
         this.hasTalked = false;
-        this.audioQueue = [];
         this.blockRecordingUntilFullResponse = false;
+        this.backgroundStream = null;
     }
 
     async startRecording() {
@@ -25,8 +25,6 @@ class AudioRecorder {
         }
         
         try {
-            await uiSoundManager.playListeningSound();
-            
             if (this.mediaRecorder) {
                 try {
                     if (this.mediaRecorder.state === 'recording') {
@@ -49,49 +47,21 @@ class AudioRecorder {
             config.isRecording = false;
             this.audioContext = null;
             this.analyser = null;
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
             const bufferLength = this.analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            const source = this.audioContext.createMediaStreamSource(stream);
+            const source = this.audioContext.createMediaStreamSource(this.stream);
             source.connect(this.analyser);
             this.startAudioAnalysis(dataArray);
-            this.mediaRecorder = new MediaRecorder(stream);
+            this.mediaRecorder = new MediaRecorder(this.stream);
             this.audioChunks = [];
             config.isRecording = true;
-            console.log("Recording started, isRecording set to:", config.isRecording);
-            
-            this.mediaRecorder.addEventListener('dataavailable', event => {
-                this.audioChunks.push(event.data);
-            });
-            
-            this.mediaRecorder.addEventListener('stop', () => {
-                if (this.audioChunks.length === 0) {
-                    console.log("No audio chunks recorded");
-                    return;
-                }
-                
-                const audioBlob = new Blob(this.audioChunks);
-                this.processAudio(audioBlob);
-                stream.getTracks().forEach(track => track.stop());
-                this.audioChunks = [];
-                
-                if (this.audioContext) {
-                    if (this.audioContext.state !== 'closed') {
-                        this.audioContext.close().catch(e => console.log("Erreur fermeture AudioContext:", e));
-                    }
-                    this.audioContext = null;
-                }
-                
-                this.mediaRecorder = null;
-            });
-            
+            this.mediaRecorder.addEventListener('dataavailable', event => this.audioChunks.push(event.data));
             this.mediaRecorder.start(100);
-            
             uiController.updateRecordingUI(true);
-            socketManager.startListening();
             
         } catch (error) {
             config.isRecording = false;
@@ -115,121 +85,32 @@ class AudioRecorder {
         if (this.mediaRecorder && config.isRecording) {
             this.mediaRecorder.stop();
             config.isRecording = false;
-            
-            uiController.updateRecordingUI(false);
-            socketManager.stopListening();
             this.hasTalked = false;
-        }
-    }
+            uiController.updateRecordingUI(false);
 
-    processAudio(audioBlob) {
-        uiController.showUserLoading();
-        
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const audioData = reader.result;
-            socketManager.sendAudioData(audioData);
-        };
-        reader.readAsDataURL(audioBlob);
-    }
-
-    toggleRecording() {
-        let actionTaken = false;
-        if (socketManager.isGeneratingResponse) {
-            socketManager.handleShutdownWordDetection();
-            actionTaken = true;
-        }
-        
-        if (this.audioQueue.length > 0 || config.isPlayingAudio) {
-            this.clearAudioQueue();
-            socketManager.cancelSpeech();
-            uiController.stopSpeaking();
-            uiController.setStatus('Synthèse vocale arrêtée');
-            actionTaken = true;
-        }
-        
-        if (!actionTaken) {
-            if (!config.isRecording) {
-                config.manualStopped = false;
-                this.startRecording();
-            } else {
-                config.manualStopped = true;
-                this.stopRecording();
+            if (this.audioChunks.length === 0) {
+                console.log("No audio chunks recorded");
+                return;
             }
-        }
-    }
-
-    queueAudioForPlayback(base64Audio) {
-        this.audioQueue.push(base64Audio);
-        if (!config.isPlayingAudio) {
-            this.playNextQueuedAudio();
-        }
-    }
-    
-    playNextQueuedAudio() {
-        if (this.audioQueue.length === 0) {
-            config.isPlayingAudio = false;
-            console.log('File d\'attente audio vide - réponse complète terminée');
-            uiController.updateRecordingUI(false, false);
-            return;
-        }
-        
-        if (config.isRecording) {
-            this.stopRecording();
-        }
-        
-        config.isPlayingAudio = true;
-        uiController.updateRecordingUI(false, true);
-        
-        const base64Audio = this.audioQueue.shift();
-        const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
-        const audioPlayer = document.getElementById('audio-player');
-        audioPlayer.src = audioSrc;
-        const cancelSpeechBtn = document.getElementById('cancel-speech');
-        if (cancelSpeechBtn) {
-            cancelSpeechBtn.classList.remove('hidden');
-        }
-        
-        audioPlayer.onended = () => {
-            console.log('Fin de lecture audio, passage au suivant');
-            if (cancelSpeechBtn && this.audioQueue.length > 0) {
-                cancelSpeechBtn.classList.add('hidden');
+            
+            const audioBlob = new Blob(this.audioChunks);
+            this.processAudio(audioBlob);
+            this.stream.getTracks().forEach(track => track.stop());
+            this.audioChunks = [];
+            
+            if (this.audioContext) {
+                if (this.audioContext.state !== 'closed') {
+                    this.audioContext.close().catch(e => console.log("Erreur fermeture AudioContext:", e));
+                }
+                this.audioContext = null;
             }
+            
+            this.mediaRecorder = null;
 
             setTimeout(() => {
-                this.playNextQueuedAudio();
-            }, 300);
-        };
-        
-        audioPlayer.play().catch(error => {
-            console.error('Erreur lors de la lecture audio:', error);
-            this.playNextQueuedAudio();
-        });
-    }
-    
-    clearAudioQueue() {
-        this.audioQueue = [];
-        config.isPlayingAudio = false;
-    }
-
-    playAudio(base64Audio) {
-        this.clearAudioQueue();
-        const wasManualStopped = config.manualStopped;
-        
-        if (config.isRecording) {
-            config.manualStopped = false;
-            this.stopRecording();
+                audioRecorder.startRecording();
+            }, 1000);
         }
-        
-        config.manualStopped = wasManualStopped;
-        config.isPlayingAudio = true;
-        uiController.playAudioInUI(base64Audio);
-    }
-
-    handleAudioPlaybackEnded() {
-        console.log('Audio playback ended');
-        config.isPlayingAudio = false;
-        uiController.setRecordingStatusText('Inactive');
     }
 
     startAudioAnalysis(dataArray) {
@@ -255,25 +136,39 @@ class AudioRecorder {
         
         audioMonitoringId = requestAnimationFrame(analyzeAudio);
     }
-    
-    handleAudioLevel(level) {
-        if (!config.isRecording) {
+
+    processAudio(audioBlob) {
+        console.log(`📊 Processing audio blob: size=${audioBlob.size} bytes, type=${audioBlob.type}`);
+        
+        if (audioBlob.size < 1000) {
+            console.warn("⚠️ Audio blob too small, likely no speech detected");
             return;
         }
         
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const audioData = reader.result;
+            console.log(`📤 Sending audio data to server: ${audioData.substring(0, 50)}... (${audioData.length} chars total)`);
+            socketManager.sendAudioData(audioData);
+        };
+        
+        reader.onerror = (error) => {
+            console.error("❌ Error reading audio blob:", error);
+        };
+        
+        reader.readAsDataURL(audioBlob);
+    }
+    
+    handleAudioLevel(level) {
         const normalizedLevel = Math.min(100, Math.max(0, level * 2));
         uiController.updateAudioLevel(normalizedLevel);
 
         if (level < 15) {
-            this.handleSilence();
+            this.silenceAudioFrameCount++;
             if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
-                console.log('Sentence end detected, stopping recording');
+                console.log('Sentence end detected');
                 this.silenceAudioFrameCount = 0;
-                this.stopRecording();
-            } else if (this.silenceAudioFrameCount > 1000 && !this.hasTalked) {
-                console.log('Inactivity detected, stopping recording');
-                this.silenceAudioFrameCount = 0;
-                config.manualStopped = true;
+                this.hasTalked = false;
                 this.stopRecording();
             }
         } else {
@@ -281,21 +176,6 @@ class AudioRecorder {
             this.silenceAudioFrameCount = 0;
             this.hasTalked = true;
         }
-    }
-    
-    handleSilence() {
-        this.silenceAudioFrameCount++;
-    }
-
-    handleStopWord() {
-        uiSoundManager.playShutdownSound()
-            .then(() => {
-                console.log('Shutdown sound played successfully');
-            })
-            .catch(error => {
-                console.error('Error playing shutdown sound:', error);
-            });
-        socketManager.handleStopWordDetection();
     }
 }
 

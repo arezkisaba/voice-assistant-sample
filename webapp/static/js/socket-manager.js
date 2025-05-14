@@ -1,5 +1,6 @@
 import config from './config.js';
 import uiController from './ui-controller.js';
+import audioPlayer from './audio-player.js';
 import audioRecorder from './audio-recorder.js';
 import uiSoundManager from './ui-sound-manager.js';
 
@@ -43,16 +44,7 @@ class SocketManager {
         this.socket.on('response_chunk', (data) => {
             this.isGeneratingResponse = true;
             console.log("--- RÉCEPTION CHUNK DE RÉPONSE ---");
-            console.log("isGeneratingResponse mis à true");
-            uiController.updateRecordingUI(false, true);
-            const startRecordingBtn = document.getElementById('start-recording');
-            console.log("État du bouton:", {
-                isInterrupting: startRecordingBtn.classList.contains('interrupting'),
-                classNames: startRecordingBtn.className,
-                innerHTML: startRecordingBtn.innerHTML,
-                visible: !startRecordingBtn.classList.contains('hidden')
-            });
-            
+            uiController.updateRecordingUI(true);
             audioRecorder.blockRecordingUntilFullResponse = true;
             let processedText = data.text;
             if (typeof processedText === 'string' && 
@@ -73,25 +65,25 @@ class SocketManager {
             }
             
             if (data.audio) {
-                audioRecorder.queueAudioForPlayback(data.audio);
+                audioPlayer.queueAudioForPlayback(data.audio);
             }
             
             setTimeout(() => {
                 if (this.isGeneratingResponse) {
                     console.log("Réapplication de l'état d'interruption après délai");
-                    uiController.updateRecordingUI(false, true);
+                    uiController.updateRecordingUI(true);
                 }
             }, 300);
         });
         
         this.socket.on('response_complete', (data) => {
             this.isGeneratingResponse = false;
-            uiController.updateRecordingUI(false, false);
+            uiController.updateRecordingUI();
             uiController.completeStreamingResponse();
             
             if (data.cancelled) {
                 console.log("🛑 Réponse annulée, nettoyage de l'interface");
-                audioRecorder.clearAudioQueue();
+                audioPlayer.clearAudioQueue();
                 uiController.setStatus('Génération de réponse arrêtée');
                 return;
             }
@@ -102,27 +94,6 @@ class SocketManager {
                 config.manualStopped = true;
                 uiSoundManager.playShutdownSound();
             }
-            
-            const checkAudioQueueAndRestart = () => {
-                console.log("Vérification de l'état de la file d'attente audio:", 
-                    audioRecorder.audioQueue.length, 
-                    "isPlayingAudio:", config.isPlayingAudio);
-                
-                if (audioRecorder.audioQueue.length === 0 && !config.isPlayingAudio) {
-                    console.log("Tous les audios ont été joués, redémarrage de l'enregistrement");
-                    
-                    if (!config.isRecording && !config.manualStopped && !config.isPlayingAudio) {
-                        console.log("Redémarrage de l'enregistrement maintenant");
-                        setTimeout(() => {
-                            audioRecorder.startRecording();
-                        }, 500);
-                    }
-                } else {
-                    setTimeout(checkAudioQueueAndRestart, 500);
-                }
-            };
-            
-            setTimeout(checkAudioQueueAndRestart, 500);
         });
         
         this.socket.on('response', (data) => {
@@ -137,37 +108,23 @@ class SocketManager {
             }
             
             if (data.audio) {
-                audioRecorder.playAudio(data.audio);
-            } else if (!config.isRecording && !userSaidStopWord && !config.manualStopped) {
-                audioRecorder.startRecording();
+                audioPlayer.playAudio(data.audio);
             }
         });
         
         this.socket.on('error', (data) => {
             this.isGeneratingResponse = false;
-            uiController.updateRecordingUI(false, false);
+            uiController.updateRecordingUI();
             
             uiController.hideAssistantLoading();
             uiController.hideUserLoading();
             uiController.disableTextInput(false);
             
             uiController.setStatus(data.message, true);
-            
-            if (!config.isRecording && !config.isPlayingAudio && !config.manualStopped) {
-                console.log('Relance automatique après erreur de compréhension');
-                setTimeout(() => {
-                    audioRecorder.startRecording();
-                }, 1000);
-            }
         });
         
         this.socket.on('listening_started', () => {
             console.log('Listening started on server');
-        });
-        
-        this.socket.on('listening_stopped', () => {
-            console.log('Listening stopped on server');
-            audioRecorder.stopRecording();
         });
     }
 
@@ -175,11 +132,19 @@ class SocketManager {
         this.socket.emit('start_listening');
     }
 
-    stopListening() {
-        this.socket.emit('stop_listening');
-    }
-
     sendAudioData(audioData) {
+        console.log(`🎙️ Sending audio data - length: ${audioData.length} chars`);
+        
+        // Log first 10 seconds of silent detection to debug timing
+        if (!this._lastAudioSent) {
+            this._lastAudioSent = Date.now();
+            console.log(`🕒 First audio chunk sent at: ${new Date().toISOString()}`);
+        } else {
+            const timeSinceLastAudio = Date.now() - this._lastAudioSent;
+            console.log(`⏱️ Time since last audio chunk: ${timeSinceLastAudio}ms`);
+            this._lastAudioSent = Date.now();
+        }
+        
         this.socket.emit('audio_data', { audio: audioData });
     }
 
@@ -200,7 +165,7 @@ class SocketManager {
         
         this.socket.emit('cancel_response');
         this.cancelSpeech();
-        audioRecorder.clearAudioQueue();
+        audioPlayer.clearAudioQueue();
         config.manualStopped = true;
         
         uiController.hideAssistantLoading();
@@ -208,7 +173,7 @@ class SocketManager {
         uiController.disableTextInput(false);
         uiController.completeStreamingResponse();
         uiController.setRecordingStatusText('Inactive');
-        uiController.updateRecordingUI(false, false);
+        uiController.updateRecordingUI();
         uiController.setStatus('Génération de réponse arrêtée');
         
         this.isGeneratingResponse = false;

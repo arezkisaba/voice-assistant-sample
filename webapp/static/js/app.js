@@ -1,5 +1,6 @@
 import config from './config.js';
 import uiController from './ui-controller.js';
+import audioPlayer from './audio-player.js';
 import audioRecorder from './audio-recorder.js';
 import socketManager from './socket-manager.js';
 import modelsManager from './models-manager.js';
@@ -29,6 +30,7 @@ class App {
         }
 
         setTimeout(() => {
+            socketManager.startListening();
             audioRecorder.startRecording();
         }, 1000);
     }
@@ -36,8 +38,9 @@ class App {
     setupEventListeners() {
         uiController.elements.sendTextBtn.addEventListener('click', this.handleSendTextMessage.bind(this));
         uiController.elements.textInput.addEventListener('keypress', this.handleTextInputKeypress.bind(this));
-        uiController.elements.startRecordingBtn.addEventListener('click', this.handleToggleRecording.bind(this));
-        uiController.elements.audioPlayer.addEventListener('ended', this.handleAudioPlaybackEnded.bind(this));
+        if (uiController.elements.interruptBtn) {
+            uiController.elements.interruptBtn.addEventListener('click', this.handleInterruptResponse.bind(this));
+        }
     }
 
     handleSendTextMessage() {
@@ -58,8 +61,8 @@ class App {
         }
     }
 
-    handleToggleRecording() {
-        audioRecorder.toggleRecording();
+    handleInterruptResponse() {
+        audioPlayer.interruptResponse();
     }
 
     handleAudioPlaybackEnded() {

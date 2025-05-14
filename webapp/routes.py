@@ -7,43 +7,61 @@ import json
 from constants import *
 
 def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
+    print("🎧 Starting audio processing thread")
+    
     while is_processing_ref[0]:
         try:
             audio_data = audio_queue.get(timeout=1)
+            
             if audio_data:
-                texte = assistant.analyser_audio(audio_data)
-                
-                if texte:
-                    socketio.emit('transcript', {'text': texte})
-                    
-                    mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
-                    is_exit_phrase = any(mot in texte.lower() for mot in mots_arret)
-                    
-                    if is_exit_phrase:
-                        response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
-                        audio_base64, _ = assistant.parler(response)
-                        socketio.emit('response', {
-                            'text': response,
-                            'audio': audio_base64,
-                            'lastUserMessage': texte,
-                            'isComplete': True
-                        })
-                    
-                        is_processing_ref[0] = False
-                        socketio.emit('listening_stopped')
-                    else:
-                        assistant.obtenir_reponse_ollama_stream(texte, socketio)
+                data_size = len(audio_data) if audio_data else 0
+                print(f"📥 Audio data received - size: {data_size} bytes")
+                text = assistant.analyser_audio(audio_data)
+                print(f"🔊 Texte analysé: {text}")
+
+                if text:
+                    activation_words = ACTIVATION_WORDS["fr"] if assistant.tts_lang == "fr" else ACTIVATION_WORDS["en"]
+                    has_activation_prefix = any(word in text.lower() for word in activation_words)
+
+                    if has_activation_prefix:
+                        socketio.emit('transcript', {'text': text})
+                        
+                        mots_arret = STOP_WORDS["fr"] if assistant.tts_lang == "fr" else STOP_WORDS["en"]
+                        has_activation_prefix = any(mot in text.lower() for mot in mots_arret)
+                        if has_activation_prefix:
+                            response = RESPONSE_MESSAGES[assistant.tts_lang]["goodbye"]
+                            audio_base64, _ = assistant.parler(response)
+                            socketio.emit('response', {
+                                'text': response,
+                                'audio': audio_base64,
+                                'lastUserMessage': text,
+                                'isComplete': True
+                            })
+                        
+                            is_processing_ref[0] = False
+                        else:
+                            texte_sans_prefixe = text[len("ok assistant"):].strip() if text.lower().startswith("ok assistant") else text
+                            new_func(socketio, assistant, texte_sans_prefixe)
                 else:
+                    print("❌ Aucun texte n'a pu être extrait de l'audio")
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
                     socketio.emit('error', {'message': error_msg})
+            else:
+                print("⚠️ Audio data empty")
             
             audio_queue.task_done()
         except queue.Empty:
             pass
         except Exception as e:
-            print(f"Error in processing thread: {e}")
+            import traceback
+            print(f"❌ Error in processing thread: {e}")
+            print(f"Stack trace: {traceback.format_exc()}")
             error_prefix = "Erreur" if assistant.tts_lang == "fr" else "Error"
             socketio.emit('error', {'message': f'{error_prefix}: {str(e)}'})
+            audio_queue.task_done()
+
+def new_func(socketio, assistant, texte):
+    assistant.obtenir_reponse_ollama_stream(texte, socketio)
 
 def register_routes(app, socketio, global_assistant, audio_queue, is_processing_ref, processing_thread_ref, available_models_ref, model_ref):
     @app.route('/models')
@@ -88,11 +106,6 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
             processing_thread_ref[0].start()
         
         emit('listening_started')
-
-    @socketio.on('stop_listening')
-    def handle_stop_listening():
-        is_processing_ref[0] = False
-        emit('listening_stopped')
 
     @socketio.on('audio_data')
     def handle_audio_data(data):
@@ -140,7 +153,6 @@ def register_routes(app, socketio, global_assistant, audio_queue, is_processing_
             })
 
             is_processing_ref[0] = False
-            emit('listening_stopped')
         else:
             global_assistant.obtenir_reponse_ollama_stream(texte, socketio)
 

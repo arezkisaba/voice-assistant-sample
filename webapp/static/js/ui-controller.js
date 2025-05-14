@@ -7,6 +7,7 @@ class UIController {
             textInput: null,
             sendTextBtn: null,
             startRecordingBtn: null,
+            interruptBtn: null,
             recordingStatus: null,
             recordingIndicator: null,
             recordingText: null,
@@ -40,6 +41,22 @@ class UIController {
         this.elements.userLoadingIndicator = document.getElementById('user-loading-indicator');
         this.elements.ttsLangSelector = document.getElementById('tts-lang-selector');
         
+        // Créer le bouton d'interruption s'il n'existe pas déjà
+        if (!document.getElementById('interrupt-btn')) {
+            const interruptBtn = document.createElement('button');
+            interruptBtn.id = 'interrupt-btn';
+            interruptBtn.className = 'record-btn interrupting hidden';
+            interruptBtn.innerHTML = '<span class="icon">✖</span> Interrompre';
+            
+            // Insérer après le bouton d'enregistrement
+            this.elements.startRecordingBtn.parentNode.insertBefore(
+                interruptBtn, 
+                this.elements.startRecordingBtn.nextSibling
+            );
+        }
+        
+        this.elements.interruptBtn = document.getElementById('interrupt-btn');
+        
         if (!document.getElementById('audio-level-meter')) {
             const meterContainer = document.createElement('div');
             meterContainer.id = 'audio-level-container';
@@ -54,27 +71,22 @@ class UIController {
         this.elements.audioLevelMeter = document.getElementById('audio-level-meter');
     }
 
-    updateRecordingUI(isRecording, isGeneratingResponse = false) {
-        if (isGeneratingResponse) {
-            this.elements.startRecordingBtn.classList.remove('recording');
-            this.elements.startRecordingBtn.classList.add('interrupting');
-            this.elements.startRecordingBtn.innerHTML = '<span class="icon">✖</span> Interrompre';
-        } else if (isRecording) {
-            this.elements.startRecordingBtn.classList.add('recording');
-            this.elements.startRecordingBtn.classList.remove('interrupting');
-            this.elements.startRecordingBtn.innerHTML = '<span class="icon">⏹</span> Arrêter';
-            this.elements.recordingStatus.style.visibility = 'visible';
-            this.elements.recordingIndicator.classList.add('active');
-            this.elements.recordingIndicator.classList.remove('responding');
-            this.elements.recordingText.textContent = 'Enregistrement...';
-        } else {
-            this.elements.startRecordingBtn.classList.remove('recording');
-            this.elements.startRecordingBtn.classList.remove('interrupting');
-            this.elements.startRecordingBtn.innerHTML = '<span class="icon">🎤</span> Parler';
-            this.elements.recordingStatus.style.visibility = 'hidden';
-            this.elements.recordingIndicator.classList.remove('active');
-            this.elements.recordingIndicator.classList.remove('responding');
-            this.elements.recordingText.textContent = 'Inactive';
+    updateRecordingUI(isGeneratingResponse = false) {
+        this.elements.startRecordingBtn.classList.add('recording');
+        this.elements.startRecordingBtn.innerHTML = '<span class="icon">🎤</span> En écoute';
+        this.elements.recordingStatus.style.visibility = 'visible';
+        this.elements.recordingIndicator.classList.add('active');
+        this.elements.recordingIndicator.classList.remove('responding');
+        this.elements.recordingText.textContent = 'En écoute...';
+    }
+
+    showInterruptButton(show) {
+        if (this.elements.interruptBtn) {
+            if (show) {
+                this.elements.interruptBtn.classList.remove('hidden');
+            } else {
+                this.elements.interruptBtn.classList.add('hidden');
+            }
         }
     }
 
@@ -162,7 +174,8 @@ class UIController {
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
-        this.updateRecordingUI(false, true);
+        // Maintenir l'état "En écoute" même pendant la lecture audio
+        this.updateRecordingUI(true);
         
         if (this.elements.cancelSpeechBtn) {
             this.elements.cancelSpeechBtn.classList.remove('hidden');
@@ -170,11 +183,13 @@ class UIController {
         
         this.elements.audioPlayer.onended = () => {
             this.stopSpeaking();
-            this.updateRecordingUI(false, false);
+            // Maintenir l'état "En écoute" après la lecture audio
+            this.updateRecordingUI(false);
         };
     }
     
     stopSpeaking() {
+        // Ne pas réinitialiser l'état du statut d'enregistrement
         // this.elements.recordingStatus.classList.remove('speaking');
         // this.elements.recordingText.textContent = 'Inactive';
     }

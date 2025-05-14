@@ -36,7 +36,8 @@ class WebAssistant:
                     os.remove(temp_file)
                 return None, RESPONSE_MESSAGES[self.tts_lang]["speech_cancelled"]
             
-            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast}"
+            # Hide ffmpeg output by redirecting it to /dev/null
+            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast} > /dev/null 2>&1"
             os.system(cmd)
             if CANCEL_SPEECH_SYNTHESIS[0]:
                 if os.path.exists(temp_file):
@@ -60,7 +61,6 @@ class WebAssistant:
                 print(f"❌ Erreur lors du nettoyage des fichiers: {e}")
                 
             return audio_base64, texte
-                
         except Exception as e:
             print(f"❌ Erreur lors de la synthèse vocale: {e}")
             return None, texte
@@ -315,7 +315,14 @@ class WebAssistant:
 
     def analyser_audio(self, audio_data):
         try:
+            print(f"💾 Début d'analyse audio, taille de données: {len(audio_data) if audio_data else 'None'}")
+            if not audio_data or len(audio_data) < 100:
+                print("❌ Données audio invalides ou trop petites")
+                return None
+
             audio_bytes = base64.b64decode(audio_data.split(',')[1])
+            print(f"💾 Audio décodé avec succès, taille: {len(audio_bytes)} octets")
+            
             session_id = str(uuid.uuid4())
             session_dir = os.path.join(self.temp_dir, f"audio_session_{session_id}")
             os.makedirs(session_dir, exist_ok=True)
@@ -325,8 +332,17 @@ class WebAssistant:
             
             with open(temp_source, 'wb') as f:
                 f.write(audio_bytes)
+            print(f"💾 Fichier source écrit: {temp_source}")
             
-            conversion_command = ["ffmpeg", "-y", "-i", temp_source, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", temp_wav]
+            # Analyse des premiers octets pour diagnostic
+            with open(temp_source, 'rb') as f:
+                header = f.read(16)
+                header_hex = ' '.join([f'{b:02x}' for b in header])
+                print(f"🔍 En-tête fichier audio: {header_hex}")
+            
+            # Modify the conversion command to hide ffmpeg output
+            conversion_command = ["ffmpeg", "-y", "-loglevel", "error", "-i", temp_source, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", temp_wav]
+            print(f"🔄 Commande de conversion: ffmpeg conversion (output hidden)")
             
             try:
                 process = subprocess.run(conversion_command, capture_output=True, text=True, check=False)
@@ -334,6 +350,7 @@ class WebAssistant:
                     print(f"❌ Error converting audio: ffmpeg returned {process.returncode}")
                     print(f"STDERR: {process.stderr}")
                     return None
+                print(f"✅ Conversion réussie: {temp_wav}")
             except Exception as e:
                 print(f"❌ Error executing ffmpeg: {e}")
                 return None
@@ -341,27 +358,38 @@ class WebAssistant:
             recognizer = sr.Recognizer()
             
             with sr.AudioFile(temp_wav) as source:
+                print(f"🎤 Lecture du fichier WAV converti")
                 audio = recognizer.record(source)
+                print(f"✅ Audio chargé dans recognizer")
                 
             speech_lang = self.speech_lang_map.get(self.tts_lang, "fr-FR")
-            print(f"Reconnaissance vocale avec la langue: {speech_lang}")
+            print(f"🗣️ Reconnaissance vocale avec la langue: {speech_lang}")
                 
             try:
+                print("🔍 Tentative de reconnaissance via Google...")
                 texte = recognizer.recognize_google(audio, language=speech_lang)
+                print(f"✅ Texte reconnu: {texte}")
                 return texte
             except sr.UnknownValueError:
-                print("Speech not recognized")
+                print("❌ Speech not recognized - aucune parole détectée")
                 return None
             except sr.RequestError as e:
-                print(f"Google Speech API error: {e}")
+                print(f"❌ Google Speech API error: {e}")
                 return None
             finally:
                 try:
-                    shutil.rmtree(session_dir, ignore_errors=True)
+                    # Conserver les fichiers temporaires en cas d'erreur pour le débogage
+                    if os.path.exists(temp_source) and os.path.exists(temp_wav):
+                        print(f"🧹 Nettoyage des fichiers temporaires dans: {session_dir}")
+                        shutil.rmtree(session_dir, ignore_errors=True)
+                    else:
+                        print(f"⚠️ Conservation des fichiers de débogage dans: {session_dir}")
                 except Exception as cleanup_error:
-                    print(f"Error during cleanup: {cleanup_error}")
+                    print(f"⚠️ Error during cleanup: {cleanup_error}")
                     pass
                 
         except Exception as e:
-            print(f"Error processing audio: {e}")
+            import traceback
+            print(f"❌ Error processing audio: {e}")
+            print(f"Stack trace: {traceback.format_exc()}")
             return None

@@ -192,6 +192,16 @@ header p {
     transform: scale(1.05);
 }
 
+#interrupt-btn {
+    margin-left: 10px;
+    background: linear-gradient(90deg, #ff9800 0%, #ff5722 100%);
+}
+
+#interrupt-btn:hover {
+    box-shadow: 0 4px 12px rgba(255, 152, 0.5);
+    transform: translateY(-2px) scale(1.05);
+}
+
 .cancel-btn {
     background: #777;
     color: white;
