@@ -264,7 +264,7 @@ class AudioRecorder {
         const normalizedLevel = Math.min(100, Math.max(0, level * 2));
         uiController.updateAudioLevel(normalizedLevel);
 
-        if (level < 30) {
+        if (level < 15) {
             this.handleSilence();
             if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
                 console.log('Sentence end detected, stopping recording');

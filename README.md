@@ -45,3 +45,4 @@ OpenRouter
 RAG => Ajout données contextuelles moi
 Rendu phrase par phrase
 Auto-scroll during stream result
+Micro toujours ouvert (OK Google)
