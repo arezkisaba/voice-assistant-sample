@@ -11,8 +11,8 @@ class AudioRecorder {
         this.analyser = null;
         this.audioBuffer = [];
         this.audioSampleRate = 0;
+        this.talkAudioFrameCount = 0;
         this.silenceAudioFrameCount = 0;
-        this.hasTalked = false;
         this.blockRecordingUntilFullResponse = false;
         this.backgroundStream = null;
     }
@@ -85,7 +85,6 @@ class AudioRecorder {
         if (this.mediaRecorder && config.isRecording) {
             this.mediaRecorder.stop();
             config.isRecording = false;
-            this.hasTalked = false;
             uiController.updateRecordingUI(false);
 
             if (this.audioChunks.length === 0) {
@@ -165,16 +164,16 @@ class AudioRecorder {
 
         if (level < 15) {
             this.silenceAudioFrameCount++;
-            if (this.silenceAudioFrameCount > 100 && this.hasTalked) {
-                console.log('Sentence end detected');
+            if (this.silenceAudioFrameCount > 100 && this.talkAudioFrameCount > 100) {
+                console.log('Sentence end detected', this.silenceAudioFrameCount, this.talkAudioFrameCount);
                 this.silenceAudioFrameCount = 0;
-                this.hasTalked = false;
+                this.talkAudioFrameCount = 0;
                 this.stopRecording();
             }
         } else {
             console.log('Talk detected');
             this.silenceAudioFrameCount = 0;
-            this.hasTalked = true;
+            this.talkAudioFrameCount++;
         }
     }
 }
