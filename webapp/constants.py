@@ -1,7 +1,7 @@
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
 
-DEFAULT_MODEL = "llama3.1:8b"
+DEFAULT_MODEL = "mistral:7b"
 DEFAULT_TTS_LANG = "fr"
 
 SYSTEM_PROMPTS = {

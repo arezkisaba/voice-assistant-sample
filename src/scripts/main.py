@@ -16,7 +16,7 @@ import speech_recognition as sr
 from gtts import gTTS
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3.1:8b"
+MODEL_NAME = "mistral:7b"
 SYSTEM_PROMPT = """Tu es un assistant vocal français intelligent et serviable. 
 Réponds de manière claire et concise, idéalement en 2-3 phrases. 
 Privilégie la simplicité et la clarté dans tes réponses."""
