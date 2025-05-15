@@ -4,6 +4,8 @@ import time
 import re
 import tempfile
 import base64
+import json
+import requests
 import shutil
 import speech_recognition as sr
 import subprocess
@@ -21,7 +23,6 @@ class WebAssistant:
         self.speech_lang_map = SPEECH_LANG_MAP
 
     def parler(self, texte):
-        CANCEL_SPEECH_SYNTHESIS[0] = False
         texte_brut = self._markdown_to_text(texte)
         texte_brut = self._nettoyer_texte(texte_brut)
         
@@ -31,23 +32,10 @@ class WebAssistant:
             temp_file = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}.mp3")
             temp_file_fast = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}_fast.mp3")
             tts.save(temp_file)
-            if CANCEL_SPEECH_SYNTHESIS[0]:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                return None, RESPONSE_MESSAGES[self.tts_lang]["speech_cancelled"]
-            
-            # Hide ffmpeg output by redirecting it to /dev/null
             cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast} > /dev/null 2>&1"
             os.system(cmd)
-            if CANCEL_SPEECH_SYNTHESIS[0]:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                if os.path.exists(temp_file_fast):
-                    os.remove(temp_file_fast)
-                return None, RESPONSE_MESSAGES[self.tts_lang]["speech_cancelled"]
-            
+
             audio_file = temp_file_fast if os.path.exists(temp_file_fast) else temp_file
-            
             with open(audio_file, 'rb') as f:
                 audio_data = f.read()
                 audio_base64 = base64.b64encode(audio_data).decode('utf-8')
@@ -187,12 +175,19 @@ class WebAssistant:
             print(f"❌ Exception lors de l'appel à Ollama: {e}")
             return ERROR_MESSAGES[self.tts_lang]["model_access"]
 
-    def obtenir_reponse_ollama_stream(self, question, socketio):
-        import re
-        import requests
-        import json
-        
-        CANCEL_RESPONSE_STREAMING[0] = False
+    def obtenir_reponse_ollama_stream(self, user_prompt, socketio, audio_queue):
+        interrupt_words = INTERRUPT_WORDS[self.tts_lang]
+        has_interrupt_prefix = any(word in user_prompt.lower() for word in interrupt_words)
+        if has_interrupt_prefix:
+            socketio.emit('interrupt', {'message': RESPONSE_MESSAGES[self.tts_lang]["response_cancelled"]})
+
+        activation_words = ACTIVATION_WORDS[self.tts_lang]
+        has_activation_prefix = any(word in user_prompt.lower() for word in activation_words)
+        if not has_activation_prefix:
+            return
+
+        socketio.emit('transcript', {'text': user_prompt})
+        user_prompt = user_prompt[len("ok assistant"):].strip() if user_prompt.lower().startswith("ok assistant") else user_prompt
         
         context_messages = []
         current_lang = self.tts_lang
@@ -201,9 +196,8 @@ class WebAssistant:
             context_messages.append(f"{speaker} [{current_lang}]: {msg}")
         
         context = "\n".join(context_messages)
-        prompt = f"{context}\nUtilisateur [{current_lang}]: {question}\nAssistant [{current_lang}]:"
+        prompt = f"{context}\nUtilisateur [{current_lang}]: {user_prompt}\nAssistant [{current_lang}]:"
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
-        print(f"Streaming depuis Ollama avec la requête: {prompt}")
         
         payload = {
             "model": MODEL_REF[0],
@@ -227,15 +221,14 @@ class WebAssistant:
             current_blocks = []
             
             for line in response_stream.iter_lines():
-                if CANCEL_RESPONSE_STREAMING[0]:
-                    print("🛑 Streaming de la réponse annulé par l'utilisateur")
-                    socketio.emit('response_complete', {
-                        'lastUserMessage': question,
-                        'isComplete': True,
-                        'cancelled': True
-                    })
-                    return None
-                
+                parallel_audio_instruction = self.contient_motif(audio_queue)
+                if (parallel_audio_instruction):
+                    parallel_user_prompt = self.analyser_audio(parallel_audio_instruction)
+                    if parallel_user_prompt:
+                        has_interrupt_prefix = any(word in parallel_user_prompt.lower() for word in interrupt_words)
+                        if has_interrupt_prefix:
+                            socketio.emit('interrupt', {'message': RESPONSE_MESSAGES[self.tts_lang]["response_cancelled"]})
+                            break
                 if line:
                     try:
                         chunk_data = json.loads(line)
@@ -251,18 +244,7 @@ class WebAssistant:
                                 if complete_blocks:
                                     blocks_text = '\n'.join(complete_blocks)
                                     current_blocks.extend(complete_blocks)
-                                    
-                                    if CANCEL_RESPONSE_STREAMING[0]:
-                                        print("🛑 Streaming de la réponse annulé pendant la synthèse vocale")
-                                        socketio.emit('response_complete', {
-                                            'lastUserMessage': question,
-                                            'isComplete': True,
-                                            'cancelled': True
-                                        })
-                                        return None
-                                    
                                     audio_base64, _ = self.parler(blocks_text)
-                                    
                                     socketio.emit('response_chunk', {
                                         'text': blocks_text,
                                         'audio': audio_base64,
@@ -275,15 +257,6 @@ class WebAssistant:
                         continue
                     
                     if 'done' in chunk_data and chunk_data['done']:
-                        if CANCEL_RESPONSE_STREAMING[0]:
-                            print("🛑 Streaming de la réponse annulé à la fin")
-                            socketio.emit('response_complete', {
-                                'lastUserMessage': question,
-                                'isComplete': True,
-                                'cancelled': True
-                            })
-                            return None
-                            
                         if buffer.strip():
                             last_audio_base64, _ = self.parler(buffer)
                             socketio.emit('response_chunk', {
@@ -291,17 +264,16 @@ class WebAssistant:
                                 'audio': last_audio_base64,
                                 'isComplete': False
                             })
-                            
                             current_blocks.append(buffer)
                         
                         socketio.emit('response_complete', {
-                            'lastUserMessage': question,
+                            'lastUserMessage': user_prompt,
                             'isComplete': True
                         })
                         
                         if len(self.conversation_history) > 10:
                             self.conversation_history = self.conversation_history[-10:]
-                        self.conversation_history.append(question)
+                        self.conversation_history.append(user_prompt)
                         self.conversation_history.append(full_response)
                         break
             
@@ -312,6 +284,12 @@ class WebAssistant:
             error_msg = ERROR_MESSAGES[self.tts_lang]["model_access"]
             socketio.emit('response', {'text': error_msg, 'isComplete': True})
             return None
+        
+    def contient_motif(self, q):
+        while not q.empty():
+            current_item = q.get()
+            return current_item
+        return None
 
     def analyser_audio(self, audio_data):
         try:

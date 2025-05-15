@@ -174,7 +174,6 @@ class UIController {
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         this.elements.audioPlayer.src = audioSrc;
         this.elements.audioPlayer.play();
-        // Maintenir l'état "En écoute" même pendant la lecture audio
         this.updateRecordingUI(true);
         
         if (this.elements.cancelSpeechBtn) {
@@ -183,7 +182,6 @@ class UIController {
         
         this.elements.audioPlayer.onended = () => {
             this.stopSpeaking();
-            // Maintenir l'état "En écoute" après la lecture audio
             this.updateRecordingUI(false);
         };
     }

@@ -31,13 +31,13 @@ class SocketManager {
         
         this.socket.on('transcript', (data) => {
             uiController.hideUserLoading();
-            uiController.addMessage('user', data.text);
             
-            if (this.isGeneratingResponse && this.isShutdownWord(data.text)) {
-                this.handleShutdownWordDetection();
+            if (this.isGeneratingResponse) {
+                this.Interrupt();
                 return;
             }
             
+            uiController.addMessage('user', data.text);
             uiController.showAssistantLoading();
         });
         
@@ -87,29 +87,11 @@ class SocketManager {
                 uiController.setStatus('Génération de réponse arrêtée');
                 return;
             }
-            
-            const userSaidStopWord = this.isStopWord(data.lastUserMessage);
-            
-            if (userSaidStopWord) {
-                config.manualStopped = true;
-                uiSoundManager.playShutdownSound();
-            }
         });
         
-        this.socket.on('response', (data) => {
-            uiController.hideAssistantLoading();
-            uiController.disableTextInput(false);
-            uiController.addMessage('assistant', data.text);
-            
-            const userSaidStopWord = this.isStopWord(data.lastUserMessage);
-            
-            if (userSaidStopWord) {
-                config.manualStopped = true;
-            }
-            
-            if (data.audio) {
-                audioPlayer.playAudio(data.audio);
-            }
+        this.socket.on('interrupt', (data) => {
+            this.isGeneratingResponse = false;
+            this.interrupt();
         });
         
         this.socket.on('error', (data) => {
@@ -133,23 +115,23 @@ class SocketManager {
     }
 
     sendAudioData(audioData) {
-        console.log(`🎙️ Sending audio data - length: ${audioData.length} chars`);
-        
-        // Log first 10 seconds of silent detection to debug timing
-        if (!this._lastAudioSent) {
-            this._lastAudioSent = Date.now();
-            console.log(`🕒 First audio chunk sent at: ${new Date().toISOString()}`);
-        } else {
-            const timeSinceLastAudio = Date.now() - this._lastAudioSent;
-            console.log(`⏱️ Time since last audio chunk: ${timeSinceLastAudio}ms`);
-            this._lastAudioSent = Date.now();
-        }
-        
         this.socket.emit('audio_data', { audio: audioData });
     }
 
     sendTextMessage(text) {
         this.socket.emit('text_input', { text });
+    }
+
+    interrupt() {
+        this.cancelSpeech();
+        audioPlayer.clearAudioQueue();
+        uiController.hideAssistantLoading();
+        uiController.hideUserLoading();
+        uiController.disableTextInput(false);
+        uiController.completeStreamingResponse();
+        uiController.setRecordingStatusText('Inactive');
+        uiController.updateRecordingUI();
+        uiController.setStatus('Génération de réponse arrêtée');
     }
 
     changeModel(model) {
@@ -160,37 +142,7 @@ class SocketManager {
         this.socket.emit('change_tts_lang', { lang });
     }
     
-    async handleShutdownWordDetection() {
-        console.log('Shutdown word detected - canceling response generation and speech synthesis');
-        
-        this.socket.emit('cancel_response');
-        this.cancelSpeech();
-        audioPlayer.clearAudioQueue();
-        config.manualStopped = true;
-        
-        uiController.hideAssistantLoading();
-        uiController.hideUserLoading();
-        uiController.disableTextInput(false);
-        uiController.completeStreamingResponse();
-        uiController.setRecordingStatusText('Inactive');
-        uiController.updateRecordingUI();
-        uiController.setStatus('Génération de réponse arrêtée');
-        
-        this.isGeneratingResponse = false;
-    }
-    
-    isStopWord(text) {
-        if (!text) return false;
-        return config.stopWords.some(word => text.toLowerCase().includes(word));
-    }
-    
-    isShutdownWord(text) {
-        if (!text) return false;
-        return config.shutdownWords.some(word => text.toLowerCase().includes(word));
-    }
-    
     cancelSpeech() {
-        this.socket.emit('cancel_speech');
         const audioPlayer = document.getElementById('audio-player');
         if (audioPlayer) {
             audioPlayer.pause();

@@ -10,8 +10,7 @@ class AudioPlayer {
     interruptResponse() {
         if (socketManager.isGeneratingResponse || config.isPlayingAudio) {
             this.clearAudioQueue();
-            socketManager.cancelSpeech();
-            socketManager.handleShutdownWordDetection();
+            socketManager.interrupt();
             uiController.stopSpeaking();
             uiController.setStatus('Réponse interrompue');
         }
@@ -58,15 +57,6 @@ class AudioPlayer {
         });
     }
     
-    playAudio(base64Audio) {
-        this.clearAudioQueue();
-        const wasManualStopped = config.manualStopped;
-        config.manualStopped = wasManualStopped;
-        config.isPlayingAudio = true;
-        uiController.showInterruptButton(true);
-        uiController.playAudioInUI(base64Audio);
-    }
-
     clearAudioQueue() {
         this.audioQueue = [];
         config.isPlayingAudio = false;

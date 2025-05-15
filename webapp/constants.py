@@ -21,9 +21,9 @@ ACTIVATION_WORDS = {
     "en": ["ok assistant"]
 }
 
-STOP_WORDS = {
-    "fr": ["au revoir"],
-    "en": ["bye"]
+INTERRUPT_WORDS = {
+    "fr": ["arrête assistant"],
+    "en": ["stop assistant"]
 }
 
 SPEECH_LANG_MAP = {
@@ -50,13 +50,11 @@ RESPONSE_MESSAGES = {
     "fr": {
         "goodbye": "Au revoir! À bientôt.",
         "language_changed": "Langue changée pour le français",
-        "speech_cancelled": "Synthèse vocale annulée",
         "response_cancelled": "Génération de réponse arrêtée"
     },
     "en": {
         "goodbye": "Goodbye! See you soon.",
         "language_changed": "Language changed to English",
-        "speech_cancelled": "Speech synthesis cancelled",
         "response_cancelled": "Response generation stopped"
     }
 }
@@ -69,5 +67,3 @@ OLLAMA_OPTIONS = {
 }
 
 AUDIO_SPEED_FACTOR = 1.5
-CANCEL_SPEECH_SYNTHESIS = [False]
-CANCEL_RESPONSE_STREAMING = [False]

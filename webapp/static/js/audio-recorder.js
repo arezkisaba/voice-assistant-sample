@@ -17,13 +17,25 @@ class AudioRecorder {
         this.backgroundStream = null;
     }
 
+    async getAudioDevice() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput' && !device.label.toLowerCase().includes('default'));
+        if (audioDevices.length === 0) {
+            console.error('Aucun périphérique audio trouvé');
+            uiController.setStatus('Aucun périphérique audio trouvé', true);
+            return [];
+        }
+
+        return audioDevices[0];
+    }
+
     async startRecording() {
         if (window.isSecureContext === false) {
             uiController.setStatus('Le microphone nécessite HTTPS. Utilisez HTTPS ou localhost pour accéder au microphone.', true);
             console.error('Microphone access requires HTTPS or localhost');
             return;
         }
-        
+
         try {
             if (this.mediaRecorder) {
                 try {
@@ -35,7 +47,7 @@ class AudioRecorder {
                 }
                 this.mediaRecorder = null;
             }
-            
+
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 try {
                     await this.audioContext.close();
@@ -43,11 +55,20 @@ class AudioRecorder {
                     console.log("Erreur lors de la fermeture du contexte audio précédent:", e);
                 }
             }
-            
+
             config.isRecording = false;
             this.audioContext = null;
             this.analyser = null;
-            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const headsetDevice = await this.getAudioDevice();
+            const constraints = {
+              audio: {
+                deviceId: { exact: headsetDevice.deviceId },
+                echoCancellation: false,  // Désactiver car vous utilisez un casque
+                noiseSuppression: true,   // Garder la suppression de bruit
+                autoGainControl: true     // Ajuster automatiquement le gain
+              }
+            };
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
@@ -62,11 +83,11 @@ class AudioRecorder {
             this.mediaRecorder.addEventListener('dataavailable', event => this.audioChunks.push(event.data));
             this.mediaRecorder.start(100);
             uiController.updateRecordingUI(true);
-            
+
         } catch (error) {
             config.isRecording = false;
             console.error('Error accessing microphone:', error);
-            
+
             if (error.name === 'NotAllowedError') {
                 uiController.setStatus('Accès au microphone refusé. Veuillez autoriser l\'accès dans les paramètres de votre navigateur.', true);
             } else if (error.name === 'NotFoundError') {
@@ -91,19 +112,19 @@ class AudioRecorder {
                 console.log("No audio chunks recorded");
                 return;
             }
-            
+
             const audioBlob = new Blob(this.audioChunks);
             this.processAudio(audioBlob);
             this.stream.getTracks().forEach(track => track.stop());
             this.audioChunks = [];
-            
+
             if (this.audioContext) {
                 if (this.audioContext.state !== 'closed') {
                     this.audioContext.close().catch(e => console.log("Erreur fermeture AudioContext:", e));
                 }
                 this.audioContext = null;
             }
-            
+
             this.mediaRecorder = null;
 
             setTimeout(() => {
@@ -121,9 +142,9 @@ class AudioRecorder {
                 }
                 return;
             }
-            
+
             this.analyser.getByteFrequencyData(dataArray);
-            
+
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 sum += dataArray[i];
@@ -132,39 +153,39 @@ class AudioRecorder {
             this.handleAudioLevel(average);
             audioMonitoringId = requestAnimationFrame(analyzeAudio);
         };
-        
+
         audioMonitoringId = requestAnimationFrame(analyzeAudio);
     }
 
     processAudio(audioBlob) {
         console.log(`📊 Processing audio blob: size=${audioBlob.size} bytes, type=${audioBlob.type}`);
-        
+
         if (audioBlob.size < 1000) {
             console.warn("⚠️ Audio blob too small, likely no speech detected");
             return;
         }
-        
+
         const reader = new FileReader();
         reader.onloadend = () => {
             const audioData = reader.result;
             console.log(`📤 Sending audio data to server: ${audioData.substring(0, 50)}... (${audioData.length} chars total)`);
             socketManager.sendAudioData(audioData);
         };
-        
+
         reader.onerror = (error) => {
             console.error("❌ Error reading audio blob:", error);
         };
-        
+
         reader.readAsDataURL(audioBlob);
     }
-    
+
     handleAudioLevel(level) {
         const normalizedLevel = Math.min(100, Math.max(0, level * 2));
         uiController.updateAudioLevel(normalizedLevel);
 
         if (level < 15) {
             this.silenceAudioFrameCount++;
-            if (this.silenceAudioFrameCount > 100 && this.talkAudioFrameCount > 100) {
+            if (this.silenceAudioFrameCount > 100 && this.talkAudioFrameCount > 0) {
                 console.log('Sentence end detected', this.silenceAudioFrameCount, this.talkAudioFrameCount);
                 this.silenceAudioFrameCount = 0;
                 this.talkAudioFrameCount = 0;
