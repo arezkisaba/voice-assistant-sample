@@ -38,9 +38,6 @@ class App {
     setupEventListeners() {
         uiController.elements.sendTextBtn.addEventListener('click', this.handleSendTextMessage.bind(this));
         uiController.elements.textInput.addEventListener('keypress', this.handleTextInputKeypress.bind(this));
-        if (uiController.elements.interruptBtn) {
-            uiController.elements.interruptBtn.addEventListener('click', this.handleInterruptResponse.bind(this));
-        }
     }
 
     handleSendTextMessage() {
@@ -59,10 +56,6 @@ class App {
         if (e.key === 'Enter') {
             this.handleSendTextMessage();
         }
-    }
-
-    handleInterruptResponse() {
-        audioPlayer.interruptResponse();
     }
 
     handleAudioPlaybackEnded() {

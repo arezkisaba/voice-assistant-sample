@@ -33,8 +33,6 @@ class AudioPlayer {
         
         config.isPlayingAudio = true;
         uiController.updateRecordingUI(true);
-        uiController.showInterruptButton(true);
-        
         const base64Audio = this.audioQueue.shift();
         const audioSrc = `data:audio/mp3;base64,${base64Audio}`;
         const audioPlayer = document.getElementById('audio-player');
@@ -42,10 +40,6 @@ class AudioPlayer {
         
         audioPlayer.onended = () => {
             console.log('Fin de lecture audio, passage au suivant');
-            if (this.audioQueue.length === 0) {
-                uiController.showInterruptButton(false);
-            }
-
             setTimeout(() => {
                 this.playNextQueuedAudio();
             }, 300);
@@ -60,7 +54,6 @@ class AudioPlayer {
     clearAudioQueue() {
         this.audioQueue = [];
         config.isPlayingAudio = false;
-        uiController.showInterruptButton(false);
     }
 }
 

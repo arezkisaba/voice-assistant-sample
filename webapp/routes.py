@@ -18,11 +18,11 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, mod
             if audio_data:
                 data_size = len(audio_data) if audio_data else 0
                 print(f"📥 Audio data received - size: {data_size} bytes")
-                user_prompt = assistant.analyser_audio(audio_data)
+                user_prompt = assistant.analyze_audio(audio_data)
                 print(f"🔊 Texte analysé: {user_prompt}")
 
                 if user_prompt:
-                    assistant.obtenir_reponse_ollama_stream(user_prompt, socketio, audio_queue, model_ref)
+                    assistant.get_ollama_response(user_prompt, socketio, audio_queue, model_ref)
                 else:
                     print("❌ Aucun texte n'a pu être extrait de l'audio")
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]

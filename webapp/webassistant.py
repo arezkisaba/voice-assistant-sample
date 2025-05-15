@@ -20,122 +20,7 @@ class WebAssistant:
         self.tts_lang = DEFAULT_TTS_LANG
         self.speech_lang_map = SPEECH_LANG_MAP
 
-    def parler(self, texte):
-        texte_brut = self._markdown_to_text(texte)
-        texte_brut = self._nettoyer_texte(texte_brut)
-        
-        try:
-            tts = gTTS(text=texte_brut, lang=self.tts_lang, slow=False)
-            timestamp = int(time.time())
-            temp_file = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}.mp3")
-            temp_file_fast = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}_fast.mp3")
-            tts.save(temp_file)
-            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast} > /dev/null 2>&1"
-            os.system(cmd)
-
-            audio_file = temp_file_fast if os.path.exists(temp_file_fast) else temp_file
-            with open(audio_file, 'rb') as f:
-                audio_data = f.read()
-                audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-            
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                if os.path.exists(temp_file_fast):
-                    os.remove(temp_file_fast)
-            except Exception as e:
-                print(f"❌ Erreur lors du nettoyage des fichiers: {e}")
-                
-            return audio_base64, texte
-        except Exception as e:
-            print(f"❌ Erreur lors de la synthèse vocale: {e}")
-            return None, texte
-    
-    def _markdown_to_text(self, markdown_text):
-        if not markdown_text:
-            return ""
-            
-        # Supprimer complètement les blocs de code
-        text = re.sub(r'```[\s\S]*?```', '', markdown_text)
-        
-        # Supprimer les backticks simples (code inline)
-        text = re.sub(r'`([^`]+)`', r'\1', text)
-        
-        # Supprimer les balises HTML
-        text = re.sub(r'<[^>]+>', '', markdown_text)
-        
-        # Convertir les liens [texte](url) en texte uniquement
-        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-        
-        # Supprimer les symboles de titre (#)
-        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-        
-        # Supprimer les symboles de liste (*, -, +)
-        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
-        
-        # Supprimer les listes numériques
-        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
-        
-        # Supprimer les symboles d'emphase (* et _) pour le gras et l'italique
-        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Gras **texte**
-        text = re.sub(r'__(.*?)__', r'\1', text)      # Gras __texte__
-        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italique *texte*
-        text = re.sub(r'_(.*?)_', r'\1', text)        # Italique _texte_
-        
-        # Supprimer les symboles de citation (>)
-        text = re.sub(r'^\s*>\s+', '', text, flags=re.MULTILINE)
-        
-        # Supprimer les barres horizontales (---, ___, ***)
-        text = re.sub(r'^\s*([-_*])\1{2,}\s*$', '', text, flags=re.MULTILINE)
-        
-        # Remplacer les tableaux par une indication simple
-        if '|' in text and re.search(r'[-|]+', text):
-            # Détection améliorée des tableaux
-            lines = text.split('\n')
-            in_table = False
-            table_lines = []
-            
-            for i, line in enumerate(lines):
-                if '|' in line:
-                    if not in_table:
-                        in_table = True
-                    table_lines.append(i)
-                elif in_table and not line.strip():
-                    # Ligne vide après un tableau
-                    in_table = False
-            
-            if table_lines:
-                # Nombre de tableaux détectés
-                table_count = 1
-                prev_line = -2
-                
-                for line_num in table_lines:
-                    if line_num > prev_line + 1:
-                        table_count += 1
-                    prev_line = line_num
-                
-                # Remplacer chaque tableau par une description simple
-                text_lines = text.split('\n')
-                for i in sorted(table_lines, reverse=True):
-                    if i < len(text_lines):
-                        text_lines.pop(i)
-                        if i == table_lines[0]:
-                            text_lines.insert(i, f"[Tableau]")
-                
-                text = '\n'.join(text_lines)
-        
-        # Supprimer les espaces et retours à la ligne superflus
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        text = text.strip()
-        
-        return text
-    
-    def _nettoyer_texte(self, texte):
-        texte = re.sub(r'(\d+)\.(\d+)', r'\1 virgule \2', texte)
-        texte = re.sub(r'(\w+)\.(\w+)', r'\1 point \2', texte)
-        return texte
-    
-    def obtenir_reponse_ollama_stream(self, user_prompt, socketio, audio_queue, model_ref):
+    def get_ollama_response(self, user_prompt, socketio, audio_queue, model_ref):
         interrupt_words = INTERRUPT_WORDS[self.tts_lang]
         has_interrupt_prefix = any(word in user_prompt.lower() for word in interrupt_words)
         if has_interrupt_prefix:
@@ -183,9 +68,9 @@ class WebAssistant:
             current_blocks = []
             
             for line in response_stream.iter_lines():
-                parallel_audio_instruction = self.contient_motif(audio_queue)
+                parallel_audio_instruction = self._get_parallel_audio_instruction(audio_queue)
                 if (parallel_audio_instruction):
-                    parallel_user_prompt = self.analyser_audio(parallel_audio_instruction)
+                    parallel_user_prompt = self.analyze_audio(parallel_audio_instruction)
                     if parallel_user_prompt:
                         has_interrupt_prefix = any(word in parallel_user_prompt.lower() for word in interrupt_words)
                         if has_interrupt_prefix:
@@ -206,7 +91,7 @@ class WebAssistant:
                                 if complete_blocks:
                                     blocks_text = '\n'.join(complete_blocks)
                                     current_blocks.extend(complete_blocks)
-                                    audio_base64, _ = self.parler(blocks_text)
+                                    audio_base64, _ = self._convert_text_to_speech(blocks_text)
                                     socketio.emit('response_chunk', {
                                         'text': blocks_text,
                                         'audio': audio_base64,
@@ -220,7 +105,7 @@ class WebAssistant:
                     
                     if 'done' in chunk_data and chunk_data['done']:
                         if buffer.strip():
-                            last_audio_base64, _ = self.parler(buffer)
+                            last_audio_base64, _ = self._convert_text_to_speech(buffer)
                             socketio.emit('response_chunk', {
                                 'text': buffer,
                                 'audio': last_audio_base64,
@@ -246,14 +131,8 @@ class WebAssistant:
             error_msg = ERROR_MESSAGES[self.tts_lang]["model_access"]
             socketio.emit('response', {'text': error_msg, 'isComplete': True})
             return None
-        
-    def contient_motif(self, q):
-        while not q.empty():
-            current_item = q.get()
-            return current_item
-        return None
 
-    def analyser_audio(self, audio_data):
+    def analyze_audio(self, audio_data):
         try:
             print(f"💾 Début d'analyse audio, taille de données: {len(audio_data) if audio_data else 'None'}")
             if not audio_data or len(audio_data) < 100:
@@ -333,3 +212,124 @@ class WebAssistant:
             print(f"❌ Error processing audio: {e}")
             print(f"Stack trace: {traceback.format_exc()}")
             return None
+
+    def _convert_text_to_speech(self, texte):
+        texte_brut = self._markdown_to_text(texte)
+        texte_brut = self._clean_text(texte_brut)
+        
+        try:
+            tts = gTTS(text=texte_brut, lang=self.tts_lang, slow=False)
+            timestamp = int(time.time())
+            temp_file = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}.mp3")
+            temp_file_fast = os.path.join(self.temp_dir, f"assistant_vocal_{timestamp}_fast.mp3")
+            tts.save(temp_file)
+            cmd = f"ffmpeg -y -i {temp_file} -filter:a \"atempo={AUDIO_SPEED_FACTOR}\" -vn {temp_file_fast} > /dev/null 2>&1"
+            os.system(cmd)
+
+            audio_file = temp_file_fast if os.path.exists(temp_file_fast) else temp_file
+            with open(audio_file, 'rb') as f:
+                audio_data = f.read()
+                audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+            
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                if os.path.exists(temp_file_fast):
+                    os.remove(temp_file_fast)
+            except Exception as e:
+                print(f"❌ Erreur lors du nettoyage des fichiers: {e}")
+                
+            return audio_base64, texte
+        except Exception as e:
+            print(f"❌ Erreur lors de la synthèse vocale: {e}")
+            return None, texte
+
+    def _get_parallel_audio_instruction(self, q):
+        while not q.empty():
+            current_item = q.get()
+            return current_item
+        return None
+
+    def _markdown_to_text(self, markdown_text):
+        if not markdown_text:
+            return ""
+            
+        # Supprimer complètement les blocs de code
+        text = re.sub(r'```[\s\S]*?```', '', markdown_text)
+        
+        # Supprimer les backticks simples (code inline)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        
+        # Supprimer les balises HTML
+        text = re.sub(r'<[^>]+>', '', markdown_text)
+        
+        # Convertir les liens [texte](url) en texte uniquement
+        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        
+        # Supprimer les symboles de titre (#)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les symboles de liste (*, -, +)
+        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les listes numériques
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les symboles d'emphase (* et _) pour le gras et l'italique
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Gras **texte**
+        text = re.sub(r'__(.*?)__', r'\1', text)      # Gras __texte__
+        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italique *texte*
+        text = re.sub(r'_(.*?)_', r'\1', text)        # Italique _texte_
+        
+        # Supprimer les symboles de citation (>)
+        text = re.sub(r'^\s*>\s+', '', text, flags=re.MULTILINE)
+        
+        # Supprimer les barres horizontales (---, ___, ***)
+        text = re.sub(r'^\s*([-_*])\1{2,}\s*$', '', text, flags=re.MULTILINE)
+        
+        # Remplacer les tableaux par une indication simple
+        if '|' in text and re.search(r'[-|]+', text):
+            # Détection améliorée des tableaux
+            lines = text.split('\n')
+            in_table = False
+            table_lines = []
+            
+            for i, line in enumerate(lines):
+                if '|' in line:
+                    if not in_table:
+                        in_table = True
+                    table_lines.append(i)
+                elif in_table and not line.strip():
+                    # Ligne vide après un tableau
+                    in_table = False
+            
+            if table_lines:
+                # Nombre de tableaux détectés
+                table_count = 1
+                prev_line = -2
+                
+                for line_num in table_lines:
+                    if line_num > prev_line + 1:
+                        table_count += 1
+                    prev_line = line_num
+                
+                # Remplacer chaque tableau par une description simple
+                text_lines = text.split('\n')
+                for i in sorted(table_lines, reverse=True):
+                    if i < len(text_lines):
+                        text_lines.pop(i)
+                        if i == table_lines[0]:
+                            text_lines.insert(i, f"[Tableau]")
+                
+                text = '\n'.join(text_lines)
+        
+        # Supprimer les espaces et retours à la ligne superflus
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = text.strip()
+        
+        return text
+    
+    def _clean_text(self, texte):
+        texte = re.sub(r'(\d+)\.(\d+)', r'\1 virgule \2', texte)
+        texte = re.sub(r'(\w+)\.(\w+)', r'\1 point \2', texte)
+        return texte

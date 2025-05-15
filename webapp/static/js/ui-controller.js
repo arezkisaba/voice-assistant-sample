@@ -7,7 +7,6 @@ class UIController {
             textInput: null,
             sendTextBtn: null,
             startRecordingBtn: null,
-            interruptBtn: null,
             recordingStatus: null,
             recordingIndicator: null,
             recordingText: null,
@@ -41,22 +40,6 @@ class UIController {
         this.elements.userLoadingIndicator = document.getElementById('user-loading-indicator');
         this.elements.ttsLangSelector = document.getElementById('tts-lang-selector');
         
-        // Créer le bouton d'interruption s'il n'existe pas déjà
-        if (!document.getElementById('interrupt-btn')) {
-            const interruptBtn = document.createElement('button');
-            interruptBtn.id = 'interrupt-btn';
-            interruptBtn.className = 'record-btn interrupting hidden';
-            interruptBtn.innerHTML = '<span class="icon">✖</span> Interrompre';
-            
-            // Insérer après le bouton d'enregistrement
-            this.elements.startRecordingBtn.parentNode.insertBefore(
-                interruptBtn, 
-                this.elements.startRecordingBtn.nextSibling
-            );
-        }
-        
-        this.elements.interruptBtn = document.getElementById('interrupt-btn');
-        
         if (!document.getElementById('audio-level-meter')) {
             const meterContainer = document.createElement('div');
             meterContainer.id = 'audio-level-container';
@@ -78,16 +61,6 @@ class UIController {
         this.elements.recordingIndicator.classList.add('active');
         this.elements.recordingIndicator.classList.remove('responding');
         this.elements.recordingText.textContent = 'En écoute...';
-    }
-
-    showInterruptButton(show) {
-        if (this.elements.interruptBtn) {
-            if (show) {
-                this.elements.interruptBtn.classList.remove('hidden');
-            } else {
-                this.elements.interruptBtn.classList.add('hidden');
-            }
-        }
     }
 
     setRecordingStatusText(text) {
