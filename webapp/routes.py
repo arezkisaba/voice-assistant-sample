@@ -6,9 +6,7 @@ import json
 
 from constants import *
 
-MODEL_REF = [DEFAULT_MODEL]
-
-def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, model_ref):
+def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, model_ref_container):
     print("🎧 Starting audio processing thread")
     
     while is_processing_ref[0]:
@@ -22,7 +20,8 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, mod
                 print(f"🔊 Texte analysé: {user_prompt}")
 
                 if user_prompt:
-                    assistant.get_ollama_response(user_prompt, socketio, audio_queue, model_ref)
+                    # Use the current model value from the container
+                    assistant.get_ollama_response(user_prompt, socketio, audio_queue, model_ref_container[0])
                 else:
                     print("❌ Aucun texte n'a pu être extrait de l'audio")
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
@@ -43,7 +42,8 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, mod
 
 def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, processing_thread_ref, available_models_ref, model_ref):
 
-    selected_model_ref = model_ref
+    # Use a mutable container to hold the model reference so it can be updated across threads
+    model_ref_container = [model_ref]
 
     @app.route('/models')
     def get_models():
@@ -51,7 +51,7 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
         
     @app.route('/current-model')
     def get_current_model():
-        return jsonify({"currentModel": selected_model_ref})
+        return jsonify({"currentModel": model_ref_container[0]})
 
     @app.route('/service-worker.js')
     def serve_service_worker():
@@ -80,7 +80,7 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
             
             processing_thread_ref[0] = threading.Thread(
                 target=process_audio_queue, 
-                args=(socketio, audio_queue, is_processing_ref, assistant, selected_model_ref)
+                args=(socketio, audio_queue, is_processing_ref, assistant, model_ref_container)
             )
             processing_thread_ref[0].daemon = True
             processing_thread_ref[0].start()
@@ -95,9 +95,9 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
     def handle_model_change(data):
         model = data.get('model')
         if model in available_models_ref:
-            model_ref = model
-            print(f"Modèle changé pour {model_ref}")
-            emit('status', {'message': f'Modèle changé pour {model_ref}'})
+            model_ref_container[0] = model
+            print(f"Modèle changé pour {model_ref_container[0]}")
+            emit('status', {'message': f'Modèle changé pour {model_ref_container[0]}'})
         else:
             emit('error', {'message': f'Modèle inconnu: {model}'})
 
