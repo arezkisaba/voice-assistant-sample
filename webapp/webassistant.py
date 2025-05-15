@@ -13,8 +13,6 @@ import uuid
 from gtts import gTTS
 from constants import *
 
-MODEL_REF = [DEFAULT_MODEL]
-
 class WebAssistant:
     def __init__(self):
         self.temp_dir = tempfile.gettempdir()
@@ -137,45 +135,7 @@ class WebAssistant:
         texte = re.sub(r'(\w+)\.(\w+)', r'\1 point \2', texte)
         return texte
     
-    def obtenir_reponse_ollama(self, question):
-        context_messages = []
-        current_lang = self.tts_lang
-        for i, msg in enumerate(self.conversation_history):
-            speaker = 'Assistant' if i%2 else 'Utilisateur'
-            context_messages.append(f"{speaker} [{current_lang}]: {msg}")
-        
-        context = "\n".join(context_messages)
-        prompt = f"{context}\nUtilisateur [{current_lang}]: {question}\nAssistant [{current_lang}]:"
-        system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
-
-        print(f"Envoi à Ollama: {prompt}")
-        print(f"Envoi system à Ollama: {system_prompt}")
-        
-        payload = {
-            "model": MODEL_REF[0],
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
-            "options": OLLAMA_OPTIONS
-        }
-        
-        try:
-            response = requests.post(OLLAMA_URL, json=payload)
-            if response.status_code == 200:
-                response_text = response.json().get("response", "")
-                if len(self.conversation_history) > 10:
-                    self.conversation_history = self.conversation_history[-10:]
-                self.conversation_history.append(question)
-                self.conversation_history.append(response_text)
-                return response_text
-            else:
-                print(f"❌ Erreur Ollama: {response.status_code}")
-                return ERROR_MESSAGES[self.tts_lang]["model_communication"]
-        except Exception as e:
-            print(f"❌ Exception lors de l'appel à Ollama: {e}")
-            return ERROR_MESSAGES[self.tts_lang]["model_access"]
-
-    def obtenir_reponse_ollama_stream(self, user_prompt, socketio, audio_queue):
+    def obtenir_reponse_ollama_stream(self, user_prompt, socketio, audio_queue, model_ref):
         interrupt_words = INTERRUPT_WORDS[self.tts_lang]
         has_interrupt_prefix = any(word in user_prompt.lower() for word in interrupt_words)
         if has_interrupt_prefix:
@@ -200,12 +160,14 @@ class WebAssistant:
         system_prompt = SYSTEM_PROMPTS.get(self.tts_lang, SYSTEM_PROMPTS["fr"])
         
         payload = {
-            "model": MODEL_REF[0],
+            "model": model_ref,
             "prompt": prompt,
             "system": system_prompt,
             "stream": True,
             "options": OLLAMA_OPTIONS
         }
+
+        print(f"🔄 Envoi de la requête à Ollama: {payload}")
         
         try:
             response_stream = requests.post(OLLAMA_URL, json=payload, stream=True)

@@ -6,7 +6,9 @@ import json
 
 from constants import *
 
-def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
+MODEL_REF = [DEFAULT_MODEL]
+
+def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, model_ref):
     print("🎧 Starting audio processing thread")
     
     while is_processing_ref[0]:
@@ -20,7 +22,7 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
                 print(f"🔊 Texte analysé: {user_prompt}")
 
                 if user_prompt:
-                    assistant.obtenir_reponse_ollama_stream(user_prompt, socketio, audio_queue)
+                    assistant.obtenir_reponse_ollama_stream(user_prompt, socketio, audio_queue, model_ref)
                 else:
                     print("❌ Aucun texte n'a pu être extrait de l'audio")
                     error_msg = ERROR_MESSAGES[assistant.tts_lang]["not_understood"]
@@ -40,13 +42,16 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant):
             audio_queue.task_done()
 
 def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, processing_thread_ref, available_models_ref, model_ref):
+
+    selected_model_ref = model_ref
+
     @app.route('/models')
     def get_models():
-        return jsonify({"models": available_models_ref[0]})
+        return jsonify({"models": available_models_ref})
         
     @app.route('/current-model')
     def get_current_model():
-        return jsonify({"currentModel": model_ref[0]})
+        return jsonify({"currentModel": selected_model_ref})
 
     @app.route('/service-worker.js')
     def serve_service_worker():
@@ -69,14 +74,13 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
     def handle_start_listening():
         if not is_processing_ref[0]:
             is_processing_ref[0] = True
-            if assistant.conversation_history and any(mot in ' '.join(assistant.conversation_history[-2:]).lower() for mot in 
-                  INTERRUPT_WORDS["fr"] + INTERRUPT_WORDS["en"]):
+            if assistant.conversation_history and any(mot in ' '.join(assistant.conversation_history[-2:]).lower() for mot in INTERRUPT_WORDS["fr"] + INTERRUPT_WORDS["en"]):
                 assistant.conversation_history = []
                 print("Historique de conversation réinitialisé après mot d'arrêt")
             
             processing_thread_ref[0] = threading.Thread(
                 target=process_audio_queue, 
-                args=(socketio, audio_queue, is_processing_ref, assistant)
+                args=(socketio, audio_queue, is_processing_ref, assistant, selected_model_ref)
             )
             processing_thread_ref[0].daemon = True
             processing_thread_ref[0].start()
@@ -90,10 +94,10 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
     @socketio.on('change_model')
     def handle_model_change(data):
         model = data.get('model')
-        if model in available_models_ref[0]:
-            model_ref[0] = model
-            print(f"Modèle changé pour {model_ref[0]}")
-            emit('status', {'message': f'Modèle changé pour {model_ref[0]}'})
+        if model in available_models_ref:
+            model_ref = model
+            print(f"Modèle changé pour {model_ref}")
+            emit('status', {'message': f'Modèle changé pour {model_ref}'})
         else:
             emit('error', {'message': f'Modèle inconnu: {model}'})
 

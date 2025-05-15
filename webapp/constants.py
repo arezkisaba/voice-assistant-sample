@@ -17,13 +17,13 @@ Prioritize simplicity and clarity in your responses."""
 SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_TTS_LANG]
 
 ACTIVATION_WORDS = {
-    "fr": ["ok assistant"],
-    "en": ["ok assistant"]
+    "fr": ["ok stéphane"],
+    "en": ["ok stéphane"]
 }
 
 INTERRUPT_WORDS = {
-    "fr": ["arrête assistant"],
-    "en": ["stop assistant"]
+    "fr": ["arrête stéphane"],
+    "en": ["stop stéphane"]
 }
 
 SPEECH_LANG_MAP = {
