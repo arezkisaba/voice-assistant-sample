@@ -20,7 +20,6 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, mod
                 print(f"🔊 Texte analysé: {user_prompt}")
 
                 if user_prompt:
-                    # Use the current model value from the container
                     assistant.get_ollama_response(user_prompt, socketio, audio_queue, model_ref_container[0])
                 else:
                     print("❌ Aucun texte n'a pu être extrait de l'audio")
@@ -42,7 +41,6 @@ def process_audio_queue(socketio, audio_queue, is_processing_ref, assistant, mod
 
 def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, processing_thread_ref, available_models_ref, model_ref):
 
-    # Use a mutable container to hold the model reference so it can be updated across threads
     model_ref_container = [model_ref]
 
     @app.route('/models')
@@ -104,10 +102,8 @@ def register_routes(app, socketio, assistant, audio_queue, is_processing_ref, pr
     @socketio.on('change_tts_lang')
     def handle_tts_lang_change(data):
         lang = data.get('lang')
-        
         if lang in ['fr', 'en']:
             assistant.tts_lang = lang
-            
             status_message = RESPONSE_MESSAGES[lang]["language_changed"]
             print(f"Langue changée pour {lang}")
             emit('status', {'message': status_message})
